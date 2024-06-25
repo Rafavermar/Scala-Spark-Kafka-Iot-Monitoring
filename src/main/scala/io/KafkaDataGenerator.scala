@@ -2,50 +2,60 @@ package io
 
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import java.sql.Timestamp
-import java.util.Properties
 
+/**
+ * Manages Kafka data production using a centralized Kafka producer.
+ * This object handles all low-level operations related to sending data to specified Kafka topics.
+ */
 object KafkaDataGenerator {
 
-  val props = new Properties()
-  props.put("bootstrap.servers", "localhost:9092")
-  props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer")
-  props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer")
+  // Creates the Kafka producer using properties defined in KafkaConfig
+  private val producer: KafkaProducer[String, String] = createProducer()
 
-  val producer = new KafkaProducer[String, String](props)
+  /**
+   * Creates a KafkaProducer using the properties configured in KafkaConfig.
+   *
+   * @return KafkaProducer[String, String] Configured Kafka producer.
+   */
+  private def createProducer(): KafkaProducer[String, String] = {
+    new KafkaProducer[String, String](KafkaDataGeneratorConfig.createProducerProperties())
+  }
 
+  /**
+   * Sends data to a specified Kafka topic.
+   *
+   * @param topic The Kafka topic to which the data will be sent.
+   * @param sensorId The ID of the sensor producing the data.
+   * @param value The value measured by the sensor.
+   * @param timestamp The timestamp of the data measurement.
+   */
   def sendData(topic: String, sensorId: String, value: Double, timestamp: Timestamp): Unit = {
-    // message definition based on topic
-    val message = topic match {
-      case "temperature_humidity" => s"$sensorId,$value,$value,$timestamp"
-      case "co2" => s"$sensorId,$value,$timestamp"
-      case "soil_moisture" => s"$sensorId,$value,$timestamp"
-      case _ => throw new Exception("Invalid topic")
-    }
+    val message = formatMessage(topic, sensorId, value, timestamp)
     val record = new ProducerRecord[String, String](topic, "key", message)
     println(s"Sending data to topic $topic")
     producer.send(record)
   }
 
-  def generateAndSendData(topic: String, sensorId: String): Unit = {
-    val timestamp = new Timestamp(System.currentTimeMillis())
-    sendData(topic, sensorId, Math.random() * 100, timestamp)
+  /**
+   * Formats a message string based on the topic and sensor data.
+   *
+   * @param topic The Kafka topic for which the message is being formatted.
+   * @param sensorId The ID of the sensor.
+   * @param value The measured value.
+   * @param timestamp The timestamp of the measurement.
+   * @return String Formatted message string.
+   */
+  private def formatMessage(topic: String, sensorId: String, value: Double, timestamp: Timestamp): String = {
+    topic match {
+      case "temperature_humidity" => s"$sensorId,$value,$value,$timestamp"
+      case "co2" => s"$sensorId,$value,$timestamp"
+      case "soil_moisture" => s"$sensorId,$value,$timestamp"
+      case _ => throw new IllegalArgumentException("Invalid topic")
+    }
   }
 
-  def main(args: Array[String]): Unit = {
-    val topics = List("temperature_humidity", "co2", "soil_moisture")
-    for (j <- 1 to 30000) {
-      for (topic <- topics) {
-        for (i <- 1 to 9) {
-          // Cada 500 registros, se envía un mensaje con un sensor desconocido
-          if (j % 50 == 0 && i == 3) {
-            generateAndSendData(topic, s"sensor-chungo-$i")
-          } else {
-            generateAndSendData(topic, s"sensor$i")
-            Thread.sleep(5) // delay for the demo purpose
-          }
-        }
-      }
-    }
-    producer.close()
-  }
+  /**
+   * Closes the Kafka producer, ensuring all resources are cleanly released.
+   */
+  def closeProducer(): Unit = producer.close()
 }
