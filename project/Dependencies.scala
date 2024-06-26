@@ -8,5 +8,6 @@ object Dependencies {
 
   val spark: Seq[ModuleID] = Seq(sparkSql, sparkSqlKafka, deltaSpark )
 
+  val typesafeConfig = "com.typesafe" % "config" % Versions.typesafeConfig
 
 }

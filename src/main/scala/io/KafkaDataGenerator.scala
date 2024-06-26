@@ -48,7 +48,7 @@ object KafkaDataGenerator {
   private def formatMessage(topic: String, sensorId: String, value: Double, timestamp: Timestamp): String = {
     topic match {
       case "temperature_humidity" => s"$sensorId,$value,$value,$timestamp"
-      case "co2" => s"$sensorId,$value,$timestamp"
+      case KafkaDataGeneratorConfig.co2Topic => s"$sensorId,$value,$timestamp"
       case "soil_moisture" => s"$sensorId,$value,$timestamp"
       case _ => throw new IllegalArgumentException("Invalid topic")
     }

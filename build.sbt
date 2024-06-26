@@ -8,4 +8,10 @@ lazy val root = (project in file("."))
   )
 
 // Importaciones necesarias para trabajar con Spark y Kafka
-libraryDependencies ++= Dependencies.spark
+libraryDependencies ++= Dependencies.spark ++ Seq(
+  Dependencies.typesafeConfig,
+)
+
+libraryDependencies ++= Seq(
+  "org.scalatest" %% "scalatest" % "3.2.9" % Test
+)
