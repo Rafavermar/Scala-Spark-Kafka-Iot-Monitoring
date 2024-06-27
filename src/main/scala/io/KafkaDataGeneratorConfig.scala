@@ -9,9 +9,10 @@ object KafkaDataGeneratorConfig {
   private val config = ConfigFactory.load()
   val bootstrapServers: String = config.getString("kafka.bootstrapServers")
   val co2Topic: String = config.getString("kafka.topics.co2.name")
-  // TODO: Add more configurarion configs
+  val temperatureHumidityTopic: String = config.getString("kafka.topics.temperature_humidity.name")
+  val soilMoistureTopic: String = config.getString("kafka.topics.soil_moisture.name")
 
-  val topics: Seq[String] = List("temperature_humidity", co2Topic, "soil_moisture")
+  val topics: Seq[String] = List(temperatureHumidityTopic, co2Topic, soilMoistureTopic)
 
 
   /**
