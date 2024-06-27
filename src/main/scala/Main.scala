@@ -1,7 +1,16 @@
-import org.apache.kafka.clients.producer._
+import io.KafkaDataGeneratorConfig
 import org.apache.spark.sql.{Dataset, Row}
 
 import java.sql.Timestamp
+
+object SensorZoneMapping {
+  private type SensorId = String
+  private type ZoneId = String
+  val sensorToZoneMap: Map[SensorId, ZoneId] = Map(
+    "sensor1" -> "zone1", "sensor2" -> "zone1", "sensor3" -> "zone1",
+    "sensor4" -> "zone2", "sensor5" -> "zone2", "sensor6" -> "zone2",
+    "sensor7" -> "zone3", "sensor8" -> "zone3", "sensor9" -> "zone3")
+}
 
 object Main extends App {
 
@@ -11,7 +20,7 @@ object Main extends App {
 
   case class SensorData(sensorId: String, value: Double, timestamp: Timestamp)
 
-  case class SensorType(name: String, sensorDataReader: (String) => SensorData, topic: String)
+  case class SensorType(name: String, sensorDataReader: String => SensorData, topic: String)
 
   // Clase para representar los datos de un sensor de humedad del suelo
   case class SoilMoistureData(sensorId: String, soilMoisture: Double, timestamp: Timestamp)
@@ -29,10 +38,11 @@ object Main extends App {
   // Clase para representar los datos de un sensor de nivel de CO2
   case class CO2Data(sensorId: String, co2Level: Double, timestamp: Timestamp, zoneId: Option[String] = None)
 
-  val sensorIdToZoneId = udf((sensorId: String) => sensorToZoneMap.getOrElse(sensorId, "unknown"))
+  val sensorIdToZoneId = udf((sensorId: String) => SensorZoneMapping.sensorToZoneMap.getOrElse(sensorId, "unknown"))
 
-  import org.apache.spark.sql.{DataFrame, SparkSession}
-  def writeData(path: String, format: String, df: DataFrame, partitions: Seq[String] = Seq.empty, checkPointPath: Option[String] = None) = {
+  import org.apache.spark.sql.DataFrame
+
+  def writeData(path: String, format: String, df: DataFrame, partitions: Seq[String] = Seq.empty, checkPointPath: Option[String] = None): Unit = {
     val writer = df.write.format(format)
     if (partitions.nonEmpty) writer.partitionBy(partitions: _*)
     if (checkPointPath.isDefined) writer.option("checkpointLocation", checkPointPath.get)
@@ -42,11 +52,11 @@ object Main extends App {
   def readData(path: String, format: String)(implicit spark: SparkSession) =
     spark.readStream.format(format).load(path)
 
-  def getKafkaStream(topic: String , spark: SparkSession) = {
+  def getKafkaStream(topic: String, spark: SparkSession) = {
     import spark.implicits._
     spark.readStream
       .format("kafka")
-      .option("kafka.bootstrap.servers", kafkaBootstrapServers)
+      .option("kafka.bootstrap.servers", KafkaDataGeneratorConfig.bootstrapServers)
       .option("subscribe", topic)
       .option("startingOffsets", "latest")
       .load()
@@ -72,34 +82,20 @@ object Main extends App {
     .config("spark.sql.shuffle.partitions", "10")
     .getOrCreate()
 
-  spark
-    .sparkContext.setLogLevel("ERROR")
+  spark.sparkContext.setLogLevel("ERROR")
 
   import spark.implicits._
 
   // Configuración de Kafka
-  val kafkaBootstrapServers = "localhost:9092"
   val temperatureHumidityTopic = "temperature_humidity"
-  val co2Topic = "co2"
   val soilMoistureTopic = "soil_moisture"
 
-
-  // Mapeo de sensores a zonas
-  // Ejemplo: sensor1 -> zona1, sensor2 -> zona2
-  private type SensorId = String
-  private type ZoneId = String
-  private val sensorToZoneMap: Map[SensorId, ZoneId] = Map(
-    "sensor1" -> "zone1", "sensor2" -> "zone1", "sensor3" -> "zone1",
-    "sensor4" -> "zone2", "sensor5" -> "zone2", "sensor6" -> "zone2",
-    "sensor7" -> "zone3", "sensor8" -> "zone3", "sensor9" -> "zone3")
-
   // Leer datos de Kafka para temperatura y humedad
-
 
   import java.sql.Timestamp
 
 
-  val temperatureHumidityDF = getKafkaStream(temperatureHumidityTopic, spark).map {
+  val temperatureHumidityDF: Dataset[TemperatureHumidityData] = getKafkaStream(temperatureHumidityTopic, spark).map {
 
     case (value, timestamp) =>
       val parts = value.split(",")
@@ -184,9 +180,7 @@ object Main extends App {
     .start()
 
 
-
-
-  val co2DF = getKafkaStream(co2Topic, spark).map {
+  val co2DF = getKafkaStream(KafkaDataGeneratorConfig.co2Topic, spark).map {
     case (value, timestamp) =>
       val parts = value.split(",")
       CO2Data(parts(0), parts(1).toDouble, Timestamp.valueOf(parts(2)))

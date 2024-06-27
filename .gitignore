@@ -305,3 +305,6 @@ docs/.jekyll-metadata
 .tmp
 
 # End of https://www.toptal.com/developers/gitignore/api/scala,sbt,intellij,java,spark
+
+/target/
+/tmp/

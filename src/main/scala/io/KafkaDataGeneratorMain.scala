@@ -8,7 +8,7 @@ import java.sql.Timestamp
 object KafkaDataGeneratorMain extends App {
 
     // Define the topics to which data will be sent
-    val topics = List("temperature_humidity", "co2", "soil_moisture")
+    val topics = KafkaDataGeneratorConfig.topics
 
     // Loop to generate and send data
   try {
