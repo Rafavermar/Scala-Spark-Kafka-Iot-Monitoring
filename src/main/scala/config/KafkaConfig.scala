@@ -3,7 +3,10 @@ package config
 import org.apache.spark.sql.SparkSession
 
 object KafkaConfig {
-  def getKafkaStream(topic: String, bootstrapServers: String)(implicit spark: SparkSession) = {
+  val bootstrapServers: String = "your_kafka_bootstrap_servers"
+  val co2Topic: String = "co2"
+
+  def getKafkaStream(topic: String)(implicit spark: SparkSession) = {
     import spark.implicits._
     spark.readStream
       .format("kafka")

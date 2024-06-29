@@ -12,11 +12,15 @@ class DataStorageService(implicit spark: SparkSession) {
   }
 
   def writeStreamData(df: DataFrame, path: String, triggerTime: String, format: String, outputMode: String, checkpointPath: String): Unit = {
-    df.writeStream
+    val writer = df.writeStream
       .format(format)
       .outputMode(outputMode)
-      .option("checkpointLocation", checkpointPath)
       .trigger(Trigger.ProcessingTime(triggerTime))
-      .start(path)
+
+    if (format != "console") {
+      writer.option("checkpointLocation", checkpointPath).start(path)
+    } else {
+      writer.start()
+    }
   }
 }

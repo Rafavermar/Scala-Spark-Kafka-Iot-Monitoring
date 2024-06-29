@@ -14,7 +14,7 @@ class SensorStreamManager(implicit spark: SparkSession) {
       .option("subscribe", topic)
       .option("startingOffsets", "latest")
       .load()
-      .selectExpr("CAST(value AS STRING)", "CAST(timestamp AS TIMESTAMP)")
+      .selectExpr("CAST(value AS STRING) as value", "CAST(timestamp AS TIMESTAMP) as timestamp")
       .as[(String, Timestamp)]
   }
 }
