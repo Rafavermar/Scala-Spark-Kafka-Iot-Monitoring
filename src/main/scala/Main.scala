@@ -1,16 +1,10 @@
 import io.KafkaDataGeneratorConfig
+import models.sensors.{CO2Sensor, SoilMoistureSensor, TemperatureHumiditySensor}
 import org.apache.spark.sql.{Dataset, Row}
+import util.SensorZoneMapping
 
 import java.sql.Timestamp
 
-object SensorZoneMapping {
-  private type SensorId = String
-  private type ZoneId = String
-  val sensorToZoneMap: Map[SensorId, ZoneId] = Map(
-    "sensor1" -> "zone1", "sensor2" -> "zone1", "sensor3" -> "zone1",
-    "sensor4" -> "zone2", "sensor5" -> "zone2", "sensor6" -> "zone2",
-    "sensor7" -> "zone3", "sensor8" -> "zone3", "sensor9" -> "zone3")
-}
 
 object Main extends App {
 
@@ -21,22 +15,6 @@ object Main extends App {
   case class SensorData(sensorId: String, value: Double, timestamp: Timestamp)
 
   case class SensorType(name: String, sensorDataReader: String => SensorData, topic: String)
-
-  // Clase para representar los datos de un sensor de humedad del suelo
-  case class SoilMoistureData(sensorId: String, soilMoisture: Double, timestamp: Timestamp)
-
-  case class UnifiedData(sensorId: String,
-                         timestamp: Timestamp,
-                         temperature: Option[Double] = None,
-                         humidity: Option[Double] = None,
-                         co2Level: Option[Double] = None,
-                         soilMoisture: Option[Double] = None)
-
-  // Clase para representar los datos de un sensor de temperatura y humedad
-  case class TemperatureHumidityData(sensorId: String, temperature: Double, humidity: Double, timestamp: Timestamp, zoneId: Option[String] = None)
-
-  // Clase para representar los datos de un sensor de nivel de CO2
-  case class CO2Data(sensorId: String, co2Level: Double, timestamp: Timestamp, zoneId: Option[String] = None)
 
   val sensorIdToZoneId = udf((sensorId: String) => SensorZoneMapping.sensorToZoneMap.getOrElse(sensorId, "unknown"))
 
@@ -95,11 +73,11 @@ object Main extends App {
   import java.sql.Timestamp
 
 
-  val temperatureHumidityDF: Dataset[TemperatureHumidityData] = getKafkaStream(temperatureHumidityTopic, spark).map {
+  val temperatureHumidityDF: Dataset[TemperatureHumiditySensor] = getKafkaStream(temperatureHumidityTopic, spark).map {
 
     case (value, timestamp) =>
       val parts = value.split(",")
-      TemperatureHumidityData(parts(0), parts(1).toDouble, parts(2).toDouble, timestamp)
+      TemperatureHumiditySensor(parts(0), parts(1).toDouble, parts(2).toDouble, timestamp)
   }
 
 
@@ -183,7 +161,7 @@ object Main extends App {
   val co2DF = getKafkaStream(KafkaDataGeneratorConfig.co2Topic, spark).map {
     case (value, timestamp) =>
       val parts = value.split(",")
-      CO2Data(parts(0), parts(1).toDouble, Timestamp.valueOf(parts(2)))
+      CO2Sensor(parts(0), parts(1).toDouble, Timestamp.valueOf(parts(2)))
   }
 
   val avgCo2DF = co2DF
@@ -197,7 +175,7 @@ object Main extends App {
   val soilMoistureDF = getKafkaStream(soilMoistureTopic, spark).map {
     case (value, timestamp) =>
       val parts = value.split(",")
-      SoilMoistureData(parts(0), parts(1).toDouble, Timestamp.valueOf(parts(2)))
+      SoilMoistureSensor(parts(0), parts(1).toDouble, Timestamp.valueOf(parts(2)))
   }
   val avgSolilMoistureDF = soilMoistureDF
     .withWatermark("timestamp", "1 minute")
@@ -207,9 +185,6 @@ object Main extends App {
     )
     .agg(avg($"soilMoisture").as("avg_soilMoisture"))
 
-
-  // Unificar los datos de los diferentes sensores
-  //val unifiedData = ???
 
   query.awaitTermination()
 

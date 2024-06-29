@@ -7,7 +7,7 @@ lazy val root = (project in file("."))
     name := "smart-farm-iot-monitoring"
   )
 
-// Importaciones necesarias para trabajar con Spark y Kafka
+
 libraryDependencies ++= Dependencies.spark ++ Seq(
   Dependencies.typesafeConfig,
 )
@@ -15,3 +15,4 @@ libraryDependencies ++= Dependencies.spark ++ Seq(
 libraryDependencies ++= Seq(
   "org.scalatest" %% "scalatest" % "3.2.9" % Test
 )
+
