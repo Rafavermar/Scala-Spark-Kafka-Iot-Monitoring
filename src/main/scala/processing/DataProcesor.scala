@@ -1,5 +1,0 @@
-package processing
-
-object DataProcesor {
-
-}
