@@ -1,11 +1,10 @@
 import config.{KafkaConfig, SparkConfig}
-import processing.{CO2Processor, SoilMoistureProcessor, TemperatureHumidityProcessor}
-import services.{DataStorageService, SensorDataProcessor, SensorStreamManager}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.streaming.Trigger
+import processing.{CO2Processor, SoilMoistureProcessor, TemperatureHumidityProcessor}
+import services.{DataStorageService, SensorDataProcessor, SensorStreamManager}
 
-object Main extends App {
+object Main2 extends App {
 
   // Configuración de Spark Session
   implicit val spark: SparkSession = SparkConfig.createSession("IoT Farm Monitoring")

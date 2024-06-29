@@ -7,7 +7,7 @@ import java.sql.Timestamp
 class SoilMoistureProcessor(implicit spark: SparkSession) {
   import spark.implicits._
 
-  def processStream(rawData: Dataset[(String, String)]): DataFrame = {
+  def processStream(rawData: Dataset[(String, Timestamp)]): DataFrame = {
     rawData.map {
       case (rawData, timestamp) =>
         val parts = rawData.split(",")
