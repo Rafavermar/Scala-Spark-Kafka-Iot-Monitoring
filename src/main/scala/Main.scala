@@ -1,4 +1,5 @@
 import io.KafkaDataGeneratorConfig
+import models.SensorData
 import models.sensors.{CO2Sensor, SoilMoistureSensor, TemperatureHumiditySensor}
 import org.apache.spark.sql.{Dataset, Row}
 import util.SensorZoneMapping
@@ -12,7 +13,8 @@ object Main extends App {
   import org.apache.spark.sql.functions._
   import org.apache.spark.sql.streaming.Trigger
 
-  case class SensorData(sensorId: String, value: Double, timestamp: Timestamp)
+  // Está duplicado en el archivo SensorDataProcessor.scala
+  //case class SensorData(sensorId: String, value: Double, timestamp: Timestamp)
 
   case class SensorType(name: String, sensorDataReader: String => SensorData, topic: String)
 
