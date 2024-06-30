@@ -1,4 +1,5 @@
 package io
+
 import java.sql.Timestamp
 
 /**
@@ -7,10 +8,10 @@ import java.sql.Timestamp
  */
 object KafkaDataGeneratorMain extends App {
 
-    // Define the topics to which data will be sent
-    val topics = KafkaDataGeneratorConfig.topics
+  // Define the topics to which data will be sent
+  val topics = KafkaDataGeneratorConfig.topics
 
-    // Loop to generate and send data
+  // Loop to generate and send data
   try {
     for (j <- 1 to 30000) {
       for (i <- 1 to 9) {
@@ -20,14 +21,14 @@ object KafkaDataGeneratorMain extends App {
           val timestamp = new Timestamp(System.currentTimeMillis())
           KafkaDataGenerator.sendData(topic, sensorId, value, timestamp)
           if (!(j % 50 == 0 && i == 3)) {
-            Thread.sleep(60) // Simulate delay more efficiently
+            Thread.sleep(5) // Simulate delay more efficiently
           }
         }
       }
     }
   } catch {
-      case e: Exception => println(s"Error during data generation and sending: ${e.getMessage}")
-    } finally {
-      KafkaDataGenerator.closeProducer()
-    }
+    case e: Exception => println(s"Error during data generation and sending: ${e.getMessage}")
+  } finally {
+    KafkaDataGenerator.closeProducer()
   }
+}

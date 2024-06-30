@@ -1,20 +1,28 @@
 package services
 
-import io.KafkaDataGeneratorConfig
-import org.apache.spark.sql.{Dataset, SparkSession}
-import java.sql.Timestamp
+import org.apache.spark.sql.functions._
+import org.apache.spark.sql.{DataFrame, SparkSession}
 
+/**
+ * SensorStreamManager is responsible for setting up Kafka streams for sensor data.
+ *
+ * @param spark Implicit SparkSession instance.
+ */
 class SensorStreamManager(implicit spark: SparkSession) {
-  import spark.implicits._
 
-  def getKafkaStream(topic: String): Dataset[(String, Timestamp)] = {
+  def getKafkaStream(topic: String, options: Map[String, String] = Map()): DataFrame = {
+    val defaultOptions = Map(
+      "kafka.bootstrap.servers" -> "localhost:9092",
+      "subscribe" -> topic,
+      "startingOffsets" -> "earliest"
+    )
+
+    val kafkaOptions = defaultOptions ++ options
+
     spark.readStream
       .format("kafka")
-      .option("kafka.bootstrap.servers", KafkaDataGeneratorConfig.bootstrapServers)
-      .option("subscribe", topic)
-      .option("startingOffsets", "latest")
+      .options(kafkaOptions)
       .load()
-      .selectExpr("CAST(value AS STRING) as value", "CAST(timestamp AS TIMESTAMP) as timestamp")
-      .as[(String, Timestamp)]
+      .selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)", "timestamp")
   }
 }
