@@ -301,7 +301,10 @@ docs/.jekyll-metadata
 
 # For SBT
 .jvmopts
-
+.tmp/*
+.tmp
 
 # End of https://www.toptal.com/developers/gitignore/api/scala,sbt,intellij,java,spark
-tmp
+
+/target/
+/tmp/
