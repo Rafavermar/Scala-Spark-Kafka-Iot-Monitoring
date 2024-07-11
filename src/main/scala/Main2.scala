@@ -4,6 +4,7 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.streaming.Trigger
 import processing.{CO2Processor, SoilMoistureProcessor, TemperatureHumidityProcessor}
+import projectutil.ZoneDataLoader
 import schemas.SensorSchemas
 import services.{DataStorageService, SensorDataProcessor, SensorStreamManager}
 
@@ -34,6 +35,8 @@ object Main2 extends App {
   // Create a SparkSession with the provided configurations
   implicit val spark: SparkSession = SparkConfig.createSession("IoT Farm Monitoring")
 
+  val zoneDataDF = ZoneDataLoader.loadZoneData()  // load zones data
+
   // Define encoders for the custom data types
   implicit val stringTimestampEncoder: Encoder[(String, Timestamp)] = Encoders.tuple(Encoders.STRING, Encoders.TIMESTAMP)
   implicit val stringStringEncoder: Encoder[(String, String)] = Encoders.tuple(Encoders.STRING, Encoders.STRING)
@@ -46,10 +49,14 @@ object Main2 extends App {
   // Initialize Delta tables with the required schemas
   initializeDeltaTables()
 
+  // debugging
+  zoneDataDF.printSchema()
+  zoneDataDF.show()
+
   // Start processing and writing data for each sensor type
-  processAndWriteCO2Data()
-  processAndWriteTemperatureHumidityData()
-  processAndWriteSoilMoistureData()
+  processAndWriteCO2Data(zoneDataDF)
+  processAndWriteTemperatureHumidityData(zoneDataDF)
+  processAndWriteSoilMoistureData(zoneDataDF)
 
   // Wait for any termination signals to stop the streaming queries
   spark.streams.awaitAnyTermination()
@@ -88,60 +95,86 @@ object Main2 extends App {
    *
    * @param spark Implicit SparkSession instance.
    */
-  private def processAndWriteCO2Data()(implicit spark: SparkSession): Unit = {
+  private def processAndWriteCO2Data(zoneDataDF: DataFrame)(implicit spark: SparkSession): Unit = {
     val co2Stream = readKafkaStream(KafkaConfig.co2Topic)
-    val co2Processor = new CO2Processor()
-    val co2DF = co2Processor.processStream(co2Stream)
-    val co2DFWithZone = sensorDataProcessor.addZoneIdColumn(co2DF)
+    val co2DF = new CO2Processor().processStream(co2Stream)
+    val renamedZoneDataDF = zoneDataDF.withColumnRenamed("zoneId", "zoneDataZoneId")
+    val co2DFWithZone = co2DF.join(renamedZoneDataDF, co2DF("sensorId") === renamedZoneDataDF("sensorId"), "left_outer")
+      .drop(renamedZoneDataDF("sensorId")) // Asegúrate de eliminar la columna correcta si es necesario.
 
-    writeStreamData(co2DFWithZone, "./tmp/raw_co2_zone", "delta", "append", "./tmp/raw_co2_zone_chk", mergeSchema = true)
+    // Verificar el esquema después de la unión para asegurarse de que las columnas son las esperadas
+    co2DFWithZone.printSchema()
 
-    val avgCo2DF = sensorDataProcessor.aggregateSensorData(co2DFWithZone, "1 minute", Seq("co2Level"))
+    // Asegúrate de que estás llevando el zoneDataZoneId a la columna zoneId si no está presente
+    val finalDF = co2DFWithZone.withColumn("zoneId", coalesce(co2DFWithZone("zoneId"), co2DFWithZone("zoneDataZoneId")))
+      .drop("zoneDataZoneId") // Limpiar las columnas temporales si ya no se necesitan
+
+    writeStreamData(finalDF, "./tmp/raw_co2_zone", "delta", "append", "./tmp/raw_co2_zone_chk", mergeSchema = true)
+
+    val avgCo2DF = sensorDataProcessor.aggregateSensorData(finalDF, "1 minute", Seq("co2Level"))
     writeStreamData(avgCo2DF, null, "console", "complete", null)
   }
+
 
   /**
    * Reads, processes, and writes temperature and humidity sensor data.
    *
    * @param spark Implicit SparkSession instance.
    */
-  private def processAndWriteTemperatureHumidityData()(implicit spark: SparkSession): Unit = {
+  private def processAndWriteTemperatureHumidityData(zoneDataDF: DataFrame)(implicit spark: SparkSession): Unit = {
     val tempHumStream = readKafkaStream(KafkaConfig.temperatureHumidityTopic)
     val tempHumProcessor = new TemperatureHumidityProcessor()
     val tempHumDF = tempHumProcessor.processStream(tempHumStream)
-    val tempHumDFWithZone = sensorDataProcessor.addZoneIdColumn(tempHumDF)
+    val renamedZoneDataDF = zoneDataDF.withColumnRenamed("zoneId", "zoneDataZoneId")
+    val tempHumDFWithZone = tempHumDF.join(renamedZoneDataDF, tempHumDF("sensorId") === renamedZoneDataDF("sensorId"), "left_outer")
+      .drop(renamedZoneDataDF("sensorId"))
 
-    if (!tempHumDFWithZone.isStreaming) {
-      dataStorageService.writeData(tempHumDFWithZone, "./tmp/raw_temperature_humidity_zone", "delta")
+    tempHumDFWithZone.printSchema()
+
+    val finalDF = tempHumDFWithZone.withColumn("zoneId", coalesce(tempHumDFWithZone("zoneId"), tempHumDFWithZone("zoneDataZoneId")))
+      .drop("zoneDataZoneId")
+
+    if (!finalDF.isStreaming) {
+      dataStorageService.writeData(finalDF, "./tmp/raw_temperature_humidity_zone", "delta")
     }
 
-    writeStreamData(tempHumDFWithZone, "./tmp/raw_temperature_humidity_zone", "delta", "append", "./tmp/raw_temperature_humidity_zone_chk", mergeSchema = true)
+    writeStreamData(finalDF, "./tmp/raw_temperature_humidity_zone", "delta", "append", "./tmp/raw_temperature_humidity_zone_chk", mergeSchema = true)
 
     val mergedTempHumDF = spark.readStream.format("delta").load("./tmp/raw_temperature_humidity_zone")
     writeStreamData(mergedTempHumDF, "./tmp/temperature_humidity_zone_merge", "delta", "append", "./tmp/temperature_humidity_zone_merge_chk", mergeSchema = true)
     writeStreamData(mergedTempHumDF, "./tmp/temperature_humidity_zone_merge_json", "json", "append", "./tmp/temperature_humidity_zone_merge_json_chk", mergeSchema = true)
 
-    val avgSensorDataDF = sensorDataProcessor.aggregateSensorData(tempHumDFWithZone, "1 minute", Seq("temperature", "humidity"))
+    val avgSensorDataDF = sensorDataProcessor.aggregateSensorData(finalDF, "1 minute", Seq("temperature", "humidity"))
     writeStreamData(avgSensorDataDF, null, "console", "complete", null)
 
-    val defectiveZoneDF = tempHumDFWithZone.filter(col("zoneId") === "defectiveZone")
+    val defectiveZoneDF = finalDF.filter(col("zoneId") === "defectiveZone")
     writeStreamToConsole(defectiveZoneDF)
   }
+
 
   /**
    * Reads, processes, and writes soil moisture sensor data.
    *
    * @param spark Implicit SparkSession instance.
    */
-  private def processAndWriteSoilMoistureData()(implicit spark: SparkSession): Unit = {
+  private def processAndWriteSoilMoistureData(zoneDataDF: DataFrame)(implicit spark: SparkSession): Unit = {
     val soilMoistureStream = readKafkaStream(KafkaConfig.soilMoistureTopic)
     val soilMoistureProcessor = new SoilMoistureProcessor()
     val soilMoistureDF = soilMoistureProcessor.processStream(soilMoistureStream)
-    val soilMoistureDFWithZone = sensorDataProcessor.addZoneIdColumn(soilMoistureDF)
-    val avgSoilMoistureDF = sensorDataProcessor.aggregateSensorData(soilMoistureDFWithZone, "1 minute", Seq("soilMoisture"))
+    val renamedZoneDataDF = zoneDataDF.withColumnRenamed("zoneId", "zoneDataZoneId")
+    val soilMoistureDFWithZone = soilMoistureDF.join(renamedZoneDataDF, soilMoistureDF("sensorId") === renamedZoneDataDF("sensorId"), "left_outer")
+      .drop(renamedZoneDataDF("sensorId"))
+
+    soilMoistureDFWithZone.printSchema()
+
+    val finalDF = soilMoistureDFWithZone.withColumn("zoneId", coalesce(soilMoistureDFWithZone("zoneId"), soilMoistureDFWithZone("zoneDataZoneId")))
+      .drop("zoneDataZoneId")
+
+    val avgSoilMoistureDF = sensorDataProcessor.aggregateSensorData(finalDF, "1 minute", Seq("soilMoisture"))
 
     writeStreamData(avgSoilMoistureDF, null, "console", "complete", null)
   }
+
 
   /**
    * Reads a Kafka stream for the given topic and returns a Dataset of tuples containing

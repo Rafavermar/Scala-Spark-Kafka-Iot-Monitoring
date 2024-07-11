@@ -1,22 +1,15 @@
 package processing
 
-import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
-import org.apache.spark.sql.types._
 import models.sensors.TemperatureHumiditySensor
 import org.apache.spark.sql.functions.{col, lit}
+import org.apache.spark.sql.types._
+import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
 
 import java.sql.Timestamp
 
 class TemperatureHumidityProcessor(implicit spark: SparkSession) {
   import spark.implicits._
 
-  private val temperatureHumiditySchema = StructType(Seq(
-    StructField("sensorId", StringType),
-    StructField("temperature", DoubleType),
-    StructField("humidity", DoubleType),
-    StructField("timestamp", TimestampType),
-    StructField("zoneId", StringType)
-  ))
 
   def processStream(rawData: Dataset[(String, Timestamp)]): DataFrame = {
     rawData.map {

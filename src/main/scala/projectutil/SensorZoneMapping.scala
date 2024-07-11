@@ -1,4 +1,4 @@
-package util
+package projectutil
 
 object SensorZoneMapping {
   type SensorId = String
