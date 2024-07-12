@@ -9,9 +9,10 @@ object SparkConfig {
       .master("local[*]")
       .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
       .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
-      .config("spark.sql.shuffle.partitions", "10")
-      .config("spark.databricks.delta.schema.autoMerge", true)
-      .config("spark.sql.adaptive.enabled","false")// Habilitar la evolución automática del esquema
+      .config("spark.sql.shuffle.partitions", "5")
+      .config("spark.databricks.delta.schema.autoMerge", value = true)
+      .config("spark.sql.adaptive.enabled","false")
+      .config("spark.sql.streaming.checkpointLocation", "./tmp")
       .getOrCreate()
   }
 }
