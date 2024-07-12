@@ -66,7 +66,7 @@ object Main2 extends App {
   private def setupLogging(): Unit = {
     val log4jConfPath = "src/main/resources/log4j.properties"
     System.setProperty("log4j.configuration", s"file:$log4jConfPath")
-    Logger.getLogger("org.apache.spark").setLevel(Level.INFO)
+    Logger.getLogger("org.apache.spark").setLevel(Level.WARN)
     Logger.getLogger("org.apache.hadoop").setLevel(Level.ERROR)
     Logger.getLogger("org.apache.zookeeper").setLevel(Level.ERROR)
     Logger.getLogger("io.netty").setLevel(Level.ERROR)
@@ -106,29 +106,22 @@ object Main2 extends App {
   private def processAndWriteCO2Data(zoneDataDF: DataFrame)(implicit spark: SparkSession): Unit = {
     val co2Stream = readKafkaStream(KafkaConfig.co2Topic)
     val co2DF = new CO2Processor().processStream(co2Stream)
-
-    // Asegúrate de que co2DF tiene la columna 'zoneId', si no está, añádela como columna vacía
-    val co2DFReady = if (co2DF.columns.contains("zoneId")) {
-      co2DF
-    } else {
-      co2DF.withColumn("zoneId", lit(null))
-    }
+    val zoneDataDF = ZoneDataLoader.loadAndWriteZoneData(spark, outputPathZones)
+    zoneDataDF.show()
 
     // Join incluyendo todas las columnas necesarias de zoneDataDF
-    val co2DFWithZone = co2DFReady.join(zoneDataDF, co2DFReady("sensorId") === zoneDataDF("sensorId"), "left_outer")
+    val co2DFWithZone = co2DF.join(zoneDataDF, co2DF("sensorId") === zoneDataDF("sensorId"), "left_outer")
       .select(
-        co2DFReady("sensorId"),
-        co2DFReady("co2Level"),
-        co2DFReady("timestamp"),
-        coalesce(co2DFReady("zoneId"), zoneDataDF("zoneId")).as("zoneId"),
+        co2DF("sensorId"),
+        co2DF("co2Level"),
+        co2DF("timestamp"),
+        zoneDataDF("zoneId"),
+        zoneDataDF("sensorType"),
         zoneDataDF("zoneName"),
         zoneDataDF("latitude"),
-        zoneDataDF("longitude"),
-
+        zoneDataDF("longitude")
       )
 
-    // Verifica el esquema después del join
-    co2DFWithZone.printSchema()
 
     // Configura el directorio de checkpoint y opciones para manejar la evolución del esquema
     val checkpointLocationCO2 = "./tmp/checkpoints/co2/"
@@ -145,8 +138,6 @@ object Main2 extends App {
   }
 
 
-
-
   /**
    * Reads, processes, and writes temperature and humidity sensor data.
    *
@@ -156,6 +147,7 @@ object Main2 extends App {
     val tempHumStream = readKafkaStream(KafkaConfig.temperatureHumidityTopic)
     val tempHumProcessor = new TemperatureHumidityProcessor()
     val tempHumDF = tempHumProcessor.processStream(tempHumStream)
+    val zoneDataDF = ZoneDataLoader.loadAndWriteZoneData(spark, outputPathZones)
 
     // Verifica que las columnas necesarias existan antes del join
     val expectedColumns = Seq("sensorId", "temperature", "humidity", "timestamp", "zoneId")
@@ -172,7 +164,8 @@ object Main2 extends App {
         tempHumDF("temperature"),
         tempHumDF("humidity"),
         tempHumDF("timestamp"),
-        coalesce(tempHumDF("zoneId"), zoneDataDF("zoneId")).as("zoneId"),
+        zoneDataDF("zoneId"),
+        zoneDataDF("sensorType"),
         zoneDataDF("zoneName"),
         zoneDataDF("latitude"),
         zoneDataDF("longitude")
@@ -212,6 +205,7 @@ object Main2 extends App {
     val soilMoistureStream = readKafkaStream(KafkaConfig.soilMoistureTopic)
     val soilMoistureProcessor = new SoilMoistureProcessor()
     var soilMoistureDF = soilMoistureProcessor.processStream(soilMoistureStream)
+    val zoneDataDF = ZoneDataLoader.loadAndWriteZoneData(spark, outputPathZones)
 
     // Asegura que ambos DataFrames tienen las columnas necesarias antes de realizar el join
     if (!soilMoistureDF.columns.contains("zoneId")) {
@@ -223,7 +217,8 @@ object Main2 extends App {
         soilMoistureDF("sensorId"),
         soilMoistureDF("soilMoisture"),
         soilMoistureDF("timestamp"),
-        coalesce(soilMoistureDF("zoneId"), zoneDataDF("zoneId")).as("zoneId"),
+        zoneDataDF("zoneId"),
+        zoneDataDF("sensorType"),
         zoneDataDF("zoneName"),
         zoneDataDF("latitude"),
         zoneDataDF("longitude")

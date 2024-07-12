@@ -1,18 +1,18 @@
 {
   "zones": [
     {
-      "id": 1,
+      "id": "1",
       "name": "Zone 1",
       "sensors": [
         {
-          "id": 1,
+          "id": "sensor1",
           "name": "Sensor 1",
           "latitude": 40.416775,
           "longitude": -3.703790,
           "type": "temperature"
         },
         {
-          "id": 2,
+          "id": "sensor2",
           "name": "Sensor 2",
           "latitude": 40.416775,
           "longitude": -3.703790,
@@ -21,18 +21,18 @@
       ]
     },
     {
-      "id": 2,
+      "id": "2",
       "name": "Zone 2",
       "sensors": [
         {
-          "id": 3,
+          "id": "sensor3",
           "name": "Sensor 3",
           "latitude": 51.507351,
           "longitude": -0.127758,
           "type": "temperature"
         },
         {
-          "id": 4,
+          "id": "sensor4",
           "name": "Sensor 4",
           "latitude": 51.507351,
           "longitude": -0.127758,
@@ -41,18 +41,18 @@
       ]
     },
     {
-      "id": 3,
+      "id": "3",
       "name": "Zone 3",
       "sensors": [
         {
-          "id": 5,
+          "id": "sensor5",
           "name": "Sensor 5",
           "latitude": 34.052235,
           "longitude": -118.243683,
           "type": "temperature"
         },
         {
-          "id": 6,
+          "id": "sensor6",
           "name": "Sensor 6",
           "latitude": 34.052235,
           "longitude": -118.243683,
@@ -61,18 +61,18 @@
       ]
     },
     {
-      "id": 4,
+      "id": "4",
       "name": "Zone 4",
       "sensors": [
         {
-          "id": 7,
+          "id": "sensor7",
           "name": "Sensor 7",
           "latitude": 48.856614,
           "longitude": 2.352222,
           "type": "temperature"
         },
         {
-          "id": 8,
+          "id": "sensor8",
           "name": "Sensor 8",
           "latitude": 48.856614,
           "longitude": 2.352222,
@@ -81,11 +81,11 @@
       ]
     },
     {
-      "id": 5,
+      "id": "5",
       "name": "Defective Zone",
       "sensors": [
         {
-          "id": 9,
+          "id": "sensor9",
           "name": "Defective Sensor 3",
           "latitude": -33.868820,
           "longitude": 151.209296,

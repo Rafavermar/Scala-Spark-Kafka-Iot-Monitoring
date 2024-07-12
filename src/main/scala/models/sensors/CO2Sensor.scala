@@ -9,4 +9,4 @@ import java.sql.Timestamp
  * @param co2Level The concentration of carbon dioxide (CO2) measured by the sensor, typically in parts per million (ppm).
  * @param timestamp The exact moment the CO2 level was recorded.
  */
-case class CO2Sensor(sensorId: String, co2Level: Double, timestamp: Timestamp, zoneId: Option[String] = None)
+case class CO2Sensor(sensorId: String, co2Level: Double, timestamp: Timestamp)
