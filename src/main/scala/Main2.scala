@@ -99,29 +99,43 @@ object Main2 extends App {
     val co2Stream = readKafkaStream(KafkaConfig.co2Topic)
     val co2DF = new CO2Processor().processStream(co2Stream)
 
-    // Asegura que ambos DataFrames tienen nombres de columnas alineados para el join, sin necesidad de renombrar
-    val co2DFWithZone = co2DF.join(zoneDataDF, co2DF("sensorId") === zoneDataDF("sensorId"), "left_outer")
+    // Asegúrate de que co2DF tiene la columna 'zoneId', si no está, añádela como columna vacía
+    val co2DFReady = if (co2DF.columns.contains("zoneId")) {
+      co2DF
+    } else {
+      co2DF.withColumn("zoneId", lit(null))
+    }
+
+    // Join sin necesidad de renombrar, asumiendo que co2DF ya tiene la columna 'zoneId'
+    val co2DFWithZone = co2DFReady.join(zoneDataDF, co2DFReady("sensorId") === zoneDataDF("sensorId"), "left_outer")
       .select(
-        co2DF("sensorId"),
-        co2DF("co2Level"),
-        co2DF("timestamp"),
-        co2DF("zoneId"), // asumiendo que co2DF ya tiene esta columna; si no, usa coalesce como se muestra abajo
+        co2DFReady("sensorId"),
+        co2DFReady("co2Level"),
+        co2DFReady("timestamp"),
+        coalesce(co2DFReady("zoneId"), zoneDataDF("zoneId")).as("zoneId"),
         zoneDataDF("zoneName"),
         zoneDataDF("latitude"),
         zoneDataDF("longitude")
       )
 
-    // Verifica el esquema después del join para asegurarse que las columnas son las esperadas
+    // Verifica el esquema después del join
     co2DFWithZone.printSchema()
 
-    // Configura el directorio de checkpoint y escribe los datos
+    // Configura el directorio de checkpoint y opciones para manejar la evolución del esquema
     val checkpointLocationCO2 = "./tmp/checkpoints/co2/"
-    writeStreamData(co2DFWithZone, "./tmp/raw_co2_zone", "delta", "append", checkpointLocationCO2, mergeSchema = true)
+    try {
+      writeStreamData(co2DFWithZone, "./tmp/raw_co2_zone", "delta", "append", checkpointLocationCO2,"CO2_zone" ,mergeSchema = true)
 
-    // Calcula promedios y escribe a la consola para monitoreo
-    val avgCo2DF = sensorDataProcessor.aggregateSensorData(co2DFWithZone, "1 minute", Seq("co2Level"))
-    writeStreamData(avgCo2DF, null, "console", "complete", checkpointLocationCO2)
+      // Calcula promedios y escribe a la consola para monitoreo
+      val avgCo2DF = sensorDataProcessor.aggregateSensorData(co2DFWithZone, "1 minute", Seq("co2Level"))
+      writeStreamData(avgCo2DF, null, "console", "complete", checkpointLocationCO2, "avgCO2DF")
+    } catch {
+      case e: Exception =>
+        println(s"Failed to write due to schema evolution issues: ${e.getMessage}")
+      // Considera reiniciar el stream con un nuevo directorio de checkpoint si el problema persiste
+    }
   }
+
 
 
   /**
@@ -133,9 +147,16 @@ object Main2 extends App {
     val tempHumStream = readKafkaStream(KafkaConfig.temperatureHumidityTopic)
     val tempHumProcessor = new TemperatureHumidityProcessor()
     val tempHumDF = tempHumProcessor.processStream(tempHumStream)
+
+    // Verifica que las columnas necesarias existan antes del join
+    val expectedColumns = Seq("sensorId", "temperature", "humidity", "timestamp", "zoneId")
+    val missingColumns = expectedColumns.filterNot(tempHumDF.columns.contains)
+    if (missingColumns.nonEmpty) {
+      throw new IllegalArgumentException("Missing columns in temperature humidity data: " + missingColumns.mkString(", "))
+    }
+
     tempHumDF.printSchema() // Verifica el esquema después de procesar el stream
 
-    // Realiza el join directamente sin renombrar columnas, asegurando consistencia
     val tempHumDFWithZone = tempHumDF.join(zoneDataDF, tempHumDF("sensorId") === zoneDataDF("sensorId"), "left_outer")
       .select(
         tempHumDF("sensorId"),
@@ -148,28 +169,29 @@ object Main2 extends App {
         zoneDataDF("longitude")
       )
 
-    // Verifica el esquema después del join
-    tempHumDFWithZone.printSchema()
+    tempHumDFWithZone.printSchema() // Verifica el esquema después del join
 
-    // Configura el directorio de checkpoint
+    // Configura el directorio de checkpoint y maneja la evolución del esquema
     val checkpointLocationTempHum = "./tmp/checkpoints/TempHum/"
+    try {
+      writeStreamData(tempHumDFWithZone, "./tmp/raw_temperature_humidity_zone", "delta", "append", checkpointLocationTempHum, "TempHum_zone",mergeSchema = true)
 
-    // Escritura de datos a la tabla Delta
-    writeStreamData(tempHumDFWithZone, "./tmp/raw_temperature_humidity_zone", "delta", "append", checkpointLocationTempHum, mergeSchema = true)
+      val mergedTempHumDF = spark.readStream.format("delta").load("./tmp/raw_temperature_humidity_zone")
+      writeStreamData(mergedTempHumDF, "./tmp/temperature_humidity_zone_merge", "delta", "append", "./tmp/temperature_humidity_zone_merge_chk", "TempHum_merge",mergeSchema = true)
+      writeStreamData(mergedTempHumDF, "./tmp/temperature_humidity_zone_merge_json", "json", "append", "./tmp/temperature_humidity_zone_merge_json_chk", "TempHum_merge_Json",mergeSchema = true)
 
-    // Leer los datos de nuevo para fusión y escritura en JSON
-    val mergedTempHumDF = spark.readStream.format("delta").load("./tmp/raw_temperature_humidity_zone")
-    writeStreamData(mergedTempHumDF, "./tmp/temperature_humidity_zone_merge", "delta", "append", "./tmp/temperature_humidity_zone_merge_chk", mergeSchema = true)
-    writeStreamData(mergedTempHumDF, "./tmp/temperature_humidity_zone_merge_json", "json", "append", "./tmp/temperature_humidity_zone_merge_json_chk", mergeSchema = true)
-
-    // Calcula promedios y escribe a la consola
-    val avgSensorDataDF = sensorDataProcessor.aggregateSensorData(tempHumDFWithZone, "1 minute", Seq("temperature", "humidity"))
-    writeStreamData(avgSensorDataDF, null, "console", "complete", checkpointLocationTempHum)
+      val avgSensorDataDF = sensorDataProcessor.aggregateSensorData(tempHumDFWithZone, "1 minute", Seq("temperature", "humidity"))
+      writeStreamData(avgSensorDataDF, null, "console", "complete", checkpointLocationTempHum,"avgSensorDataDF")
+    } catch {
+      case e: Exception =>
+        println(s"Error processing temperature and humidity data: ${e.getMessage}")
+    }
 
     // Filtro y escritura de datos de sensores defectuosos
     val defectiveZoneDF = tempHumDFWithZone.filter(col("zoneId") === "defectiveZone")
     writeStreamToConsole(defectiveZoneDF)
   }
+
 
 
   /**
@@ -180,9 +202,13 @@ object Main2 extends App {
   private def processAndWriteSoilMoistureData(zoneDataDF: DataFrame)(implicit spark: SparkSession): Unit = {
     val soilMoistureStream = readKafkaStream(KafkaConfig.soilMoistureTopic)
     val soilMoistureProcessor = new SoilMoistureProcessor()
-    val soilMoistureDF = soilMoistureProcessor.processStream(soilMoistureStream)
+    var soilMoistureDF = soilMoistureProcessor.processStream(soilMoistureStream)
 
-    // Realiza el join sin renombrar las columnas para evitar errores de esquemas no coincidentes
+    // Asegura que ambos DataFrames tienen las columnas necesarias antes de realizar el join
+    if (!soilMoistureDF.columns.contains("zoneId")) {
+      soilMoistureDF = soilMoistureDF.withColumn("zoneId", lit(null))
+    }
+
     val soilMoistureDFWithZone = soilMoistureDF.join(zoneDataDF, soilMoistureDF("sensorId") === zoneDataDF("sensorId"), "left_outer")
       .select(
         soilMoistureDF("sensorId"),
@@ -194,18 +220,21 @@ object Main2 extends App {
         zoneDataDF("longitude")
       )
 
-    // Verifica el esquema después del join
+    // Verificación del esquema post-join para asegurar la integridad de los datos
     soilMoistureDFWithZone.printSchema()
 
-    // Configura el directorio de checkpoint
+    // Establece el directorio de checkpoint y maneja la evolución del esquema
     val checkpointLocationSoilMoist = "./tmp/checkpoints/SoilMoist/"
+    try {
+      writeStreamData(soilMoistureDFWithZone, "./tmp/raw_soil_moisture_zone", "delta", "append", checkpointLocationSoilMoist,"SoilMoisture_zone" ,mergeSchema = true)
 
-    // Escritura de datos
-    writeStreamData(soilMoistureDFWithZone, "./tmp/raw_soil_moisture_zone", "delta", "append", checkpointLocationSoilMoist, mergeSchema = true)
-
-    // Agrega datos para promedio y escribe a la consola
-    val avgSoilMoistureDF = sensorDataProcessor.aggregateSensorData(soilMoistureDFWithZone, "1 minute", Seq("soilMoisture"))
-    writeStreamData(avgSoilMoistureDF, null, "console", "complete", checkpointLocationSoilMoist)
+      // Calcula los promedios y escribe los resultados a la consola para monitoreo en tiempo real
+      val avgSoilMoistureDF = sensorDataProcessor.aggregateSensorData(soilMoistureDFWithZone, "1 minute", Seq("soilMoisture"))
+      writeStreamData(avgSoilMoistureDF, null, "console", "complete", checkpointLocationSoilMoist,"avgSoilMoisture")
+    } catch {
+      case e: Exception =>
+        println(s"Error processing soil moisture data: ${e.getMessage}")
+    }
   }
 
 
@@ -233,10 +262,14 @@ object Main2 extends App {
    * @param mergeSchema Boolean indicating whether to merge schemas.
    * @param spark Implicit SparkSession instance.
    */
-  private def writeStreamData(df: Dataset[_], outputPath: String, format: String, outputMode: String, checkpointLocation: String, mergeSchema: Boolean = false)(implicit spark: SparkSession): Unit = {
+  private def writeStreamData(df: Dataset[_], outputPath: String, format: String, outputMode: String, checkpointLocation: String, queryName: String, mergeSchema: Boolean = false)(implicit spark: SparkSession): Unit = {
     val writer = df.writeStream
       .outputMode(outputMode)
       .format(format)
+      .option("checkpointLocation", checkpointLocation)
+      .option("path", outputPath)
+      .option("mergeSchema", mergeSchema.toString)
+      .queryName(queryName) // Asegúrate de que queryName se llama correctamente
       .trigger(Trigger.ProcessingTime("30 seconds"))
 
     if (outputPath != null) writer.option("path", outputPath)
