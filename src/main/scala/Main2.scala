@@ -124,11 +124,11 @@ object Main2 extends App {
     // Configura el directorio de checkpoint y opciones para manejar la evolución del esquema
     val checkpointLocationCO2 = "./tmp/checkpoints/co2/"
     try {
-      writeStreamData(co2DFWithZone, "./tmp/raw_co2_zone", "delta", "append", checkpointLocationCO2,"CO2_zone" ,mergeSchema = true)
+      writeStreamData(co2DFWithZone, "./tmp/raw_co2_zone", "delta", "append", checkpointLocationCO2,"CO2_zone" ,true)
 
       // Calcula promedios y escribe a la consola para monitoreo
       val avgCo2DF = sensorDataProcessor.aggregateSensorData(co2DFWithZone, "1 minute", Seq("co2Level"))
-      writeStreamData(avgCo2DF, null, "console", "complete", checkpointLocationCO2, "avgCO2DF")
+      writeStreamData(avgCo2DF, null, "console", "complete", checkpointLocationCO2, "avgCO2DF", true)
     } catch {
       case e: Exception =>
         println(s"Failed to write due to schema evolution issues: ${e.getMessage}")
@@ -174,14 +174,14 @@ object Main2 extends App {
     // Configura el directorio de checkpoint y maneja la evolución del esquema
     val checkpointLocationTempHum = "./tmp/checkpoints/TempHum/"
     try {
-      writeStreamData(tempHumDFWithZone, "./tmp/raw_temperature_humidity_zone", "delta", "append", checkpointLocationTempHum, "TempHum_zone",mergeSchema = true)
+      writeStreamData(tempHumDFWithZone, "./tmp/raw_temperature_humidity_zone", "delta", "append", checkpointLocationTempHum, "TempHum_zone",true)
 
       val mergedTempHumDF = spark.readStream.format("delta").load("./tmp/raw_temperature_humidity_zone")
       writeStreamData(mergedTempHumDF, "./tmp/temperature_humidity_zone_merge", "delta", "append", "./tmp/temperature_humidity_zone_merge_chk", "TempHum_merge",mergeSchema = true)
       writeStreamData(mergedTempHumDF, "./tmp/temperature_humidity_zone_merge_json", "json", "append", "./tmp/temperature_humidity_zone_merge_json_chk", "TempHum_merge_Json",mergeSchema = true)
 
       val avgSensorDataDF = sensorDataProcessor.aggregateSensorData(tempHumDFWithZone, "1 minute", Seq("temperature", "humidity"))
-      writeStreamData(avgSensorDataDF, null, "console", "complete", checkpointLocationTempHum,"avgSensorDataDF")
+      writeStreamData(avgSensorDataDF, null, "console", "complete", checkpointLocationTempHum,"avgSensorDataDF", true)
     } catch {
       case e: Exception =>
         println(s"Error processing temperature and humidity data: ${e.getMessage}")
@@ -226,11 +226,11 @@ object Main2 extends App {
     // Establece el directorio de checkpoint y maneja la evolución del esquema
     val checkpointLocationSoilMoist = "./tmp/checkpoints/SoilMoist/"
     try {
-      writeStreamData(soilMoistureDFWithZone, "./tmp/raw_soil_moisture_zone", "delta", "append", checkpointLocationSoilMoist,"SoilMoisture_zone" ,mergeSchema = true)
+      writeStreamData(soilMoistureDFWithZone, "./tmp/raw_soil_moisture_zone", "delta", "append", checkpointLocationSoilMoist,"SoilMoisture_zone" , true)
 
       // Calcula los promedios y escribe los resultados a la consola para monitoreo en tiempo real
       val avgSoilMoistureDF = sensorDataProcessor.aggregateSensorData(soilMoistureDFWithZone, "1 minute", Seq("soilMoisture"))
-      writeStreamData(avgSoilMoistureDF, null, "console", "complete", checkpointLocationSoilMoist,"avgSoilMoisture")
+      writeStreamData(avgSoilMoistureDF, null, "console", "complete", checkpointLocationSoilMoist,"avgSoilMoisture", true)
     } catch {
       case e: Exception =>
         println(s"Error processing soil moisture data: ${e.getMessage}")
