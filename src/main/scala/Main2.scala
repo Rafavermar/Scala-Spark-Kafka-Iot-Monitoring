@@ -8,6 +8,7 @@ import schemas.SensorSchemas
 import services.{DataStorageService, SensorDataProcessor, SensorStreamManager}
 
 import java.sql.Timestamp
+import scala.Console.{BOLD, RESET}
 
 
 /**
@@ -39,18 +40,27 @@ object Main2 extends App {
   implicit val stringStringEncoder: Encoder[(String, String)] = Encoders.tuple(Encoders.STRING, Encoders.STRING)
 
   // Instantiate necessary services and processors
+  println(BOLD + "Creating services and processors..." + RESET)
+  println(BOLD + "Creating services and processors: sensorStreamManager" + RESET)
   val sensorStreamManager = new SensorStreamManager()
+  println(BOLD + "Creating services and processors: dataStorageService" + RESET)
   val dataStorageService = new DataStorageService()
+  println(BOLD + "Creating services and processors: sensorDataProcessor" + RESET)
   val sensorDataProcessor = new SensorDataProcessor()
 
   // Initialize Delta tables with the required schemas
+  println(BOLD + "Initializing Delta tables..." + RESET)
   initializeDeltaTables()
 
   // Start processing and writing data for each sensor type
+  println(BOLD + "Processing and writing sensor data..." + RESET)
   processAndWriteCO2Data()
+  println(BOLD + "Processing and writing sensor data: processAndWriteTemperatureHumidityData" + RESET)
   processAndWriteTemperatureHumidityData()
+  println(BOLD + "Processing and writing sensor data: processAndWriteSoilMoistureData" + RESET)
   processAndWriteSoilMoistureData()
 
+  println(BOLD + "Waiting for any termination signals to stop the streaming queries..." + RESET)
   // Wait for any termination signals to stop the streaming queries
   spark.streams.awaitAnyTermination()
 
@@ -73,13 +83,25 @@ object Main2 extends App {
    * @param spark Implicit SparkSession instance.
    */
   private def initializeDeltaTables()(implicit spark: SparkSession): Unit = {
+    println(BOLD + "Initializing Delta tables: emptyTempHumDF" + RESET)
     val emptyTempHumDF = spark.createDataFrame(spark.sparkContext.emptyRDD[Row], SensorSchemas.temperatureHumiditySchema)
+
+    println(BOLD + "Initializing Delta tables: emptyCo2DF" + RESET)
     val emptyCo2DF = spark.createDataFrame(spark.sparkContext.emptyRDD[Row], SensorSchemas.co2Schema)
+
+    println(BOLD + "Initializing Delta tables: emptySoilMoistureDF" + RESET)
     val emptySoilMoistureDF = spark.createDataFrame(spark.sparkContext.emptyRDD[Row], SensorSchemas.soilMoistureSchema)
 
+    println(BOLD + "Initializing Delta tables: writing emptyTempHumDF, emptyCo2DF, and emptySoilMoistureDF" + RESET)
     emptyTempHumDF.write.format("delta").mode("overwrite").save("./tmp/raw_temperature_humidity_zone")
+
+    println(BOLD + "Initializing Delta tables: writing emptyTempHumDF" + RESET)
     emptyTempHumDF.write.format("delta").mode("overwrite").save("./tmp/temperature_humidity_zone_merge")
+
+    println(BOLD + "Initializing Delta tables: writing emptyTempHumDF" + RESET)
     emptyCo2DF.write.format("delta").mode("overwrite").save("./tmp/raw_co2_zone")
+
+    println(BOLD + "Initializing Delta tables: writing emptyTempHumDF" + RESET)
     emptySoilMoistureDF.write.format("delta").mode("overwrite").save("./tmp/raw_soil_moisture_zone")
   }
 
@@ -153,6 +175,7 @@ object Main2 extends App {
    */
   private def readKafkaStream(topic: String)(implicit spark: SparkSession): Dataset[(String, Timestamp)] = {
     sensorStreamManager.getKafkaStream(topic, Map("failOnDataLoss" -> "false"))
+      .getOrElse(spark.emptyDataFrame)
       .selectExpr("CAST(value AS STRING)", "timestamp").as[(String, Timestamp)]
   }
 

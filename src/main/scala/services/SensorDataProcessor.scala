@@ -9,7 +9,7 @@ import org.apache.spark.sql.{DataFrame, SparkSession}
  *
  * @param spark Implicit SparkSession instance.
  */
-class SensorDataProcessor(implicit spark: SparkSession) {
+class SensorDataProcessor()(implicit spark: SparkSession) {
   import spark.implicits._
 
   // Mapping of sensors to zones, including defective sensors.

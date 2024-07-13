@@ -15,6 +15,6 @@ class SensorStreamManagerTest extends AnyFunSuite {
 
     val stream = manager.getKafkaStream("test-topic")
 
-    assert(stream.isStreaming)
+    assert(stream.get.isStreaming)
   }
 }
