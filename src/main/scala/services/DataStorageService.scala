@@ -3,7 +3,7 @@ package services
 import org.apache.spark.sql.streaming.Trigger
 import org.apache.spark.sql.{DataFrame, SparkSession}
 
-class DataStorageService(implicit spark: SparkSession) {
+class DataStorageService() {
   def writeData(df: DataFrame, path: String, format: String, checkpointPath: Option[String] = None, partitions: Seq[String] = Seq.empty): Unit = {
     val writer = df.write.format(format)
     if (partitions.nonEmpty) writer.partitionBy(partitions: _*)

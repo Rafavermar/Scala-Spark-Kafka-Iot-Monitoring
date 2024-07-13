@@ -1,13 +1,17 @@
+package main
+
 import config.{KafkaConfig, SparkConfig}
 import org.apache.log4j.{Level, Logger}
-import org.apache.spark.sql._
+import org.apache.spark.sql.{DataFrame, Dataset, Encoder, Encoders, Row, SparkSession}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.streaming.Trigger
 import processing.{CO2Processor, SoilMoistureProcessor, TemperatureHumidityProcessor}
 import schemas.SensorSchemas
 import services.{DataStorageService, SensorDataProcessor, SensorStreamManager}
+import util.PrintUtils
 
 import java.sql.Timestamp
+import scala.Console.{BOLD, RESET}
 
 
 /**
@@ -26,7 +30,7 @@ import java.sql.Timestamp
  * - writeStreamToConsole: Writes streaming data to the console for debugging and monitoring purposes.
  */
 
-object Main2 extends App {
+object Main2 extends App with PrintUtils {
 
   // Setup logging configuration
   setupLogging()
@@ -39,18 +43,27 @@ object Main2 extends App {
   implicit val stringStringEncoder: Encoder[(String, String)] = Encoders.tuple(Encoders.STRING, Encoders.STRING)
 
   // Instantiate necessary services and processors
+  printBoldMessage("Creating services and processors...")
+  printBoldMessage("Creating services and processors: sensorStreamManager")
   val sensorStreamManager = new SensorStreamManager()
+  printBoldMessage("Creating services and processors: dataStorageService")
   val dataStorageService = new DataStorageService()
+  printBoldMessage("Creating services and processors: sensorDataProcessor")
   val sensorDataProcessor = new SensorDataProcessor()
 
   // Initialize Delta tables with the required schemas
+  printBoldMessage("Initializing Delta tables...")
   initializeDeltaTables()
 
   // Start processing and writing data for each sensor type
+  printBoldMessage("Processing and writing sensor data...")
   processAndWriteCO2Data()
+  printBoldMessage("Processing and writing sensor data: processAndWriteTemperatureHumidityData")
   processAndWriteTemperatureHumidityData()
+  printBoldMessage("Processing and writing sensor data: processAndWriteSoilMoistureData")
   processAndWriteSoilMoistureData()
 
+  printBoldMessage("Waiting for any termination signals to stop the streaming queries...")
   // Wait for any termination signals to stop the streaming queries
   spark.streams.awaitAnyTermination()
 
@@ -73,13 +86,25 @@ object Main2 extends App {
    * @param spark Implicit SparkSession instance.
    */
   private def initializeDeltaTables()(implicit spark: SparkSession): Unit = {
+    printBoldMessage("Initializing Delta tables: emptyTempHumDF")
     val emptyTempHumDF = spark.createDataFrame(spark.sparkContext.emptyRDD[Row], SensorSchemas.temperatureHumiditySchema)
-    val emptyCo2DF = spark.createDataFrame(spark.sparkContext.emptyRDD[Row], SensorSchemas.co2Schema)
-    val emptySoilMoistureDF = spark.createDataFrame(spark.sparkContext.emptyRDD[Row], SensorSchemas.soilMoistureSchema)
 
+    printBoldMessage("Initializing Delta tables: emptyCo2DF")
+    val emptyCo2DF = spark.createDataFrame(spark.sparkContext.emptyRDD[Row], SensorSchemas.co2Schema)
+
+    printBoldMessage("Initializing Delta tables: emptySoilMoistureDF")
+    val emptySoilMoistureDF: DataFrame = spark.createDataFrame(spark.sparkContext.emptyRDD[Row], SensorSchemas.soilMoistureSchema)
+
+    printBoldMessage("Initializing Delta tables: writing emptyTempHumDF, emptyCo2DF, and emptySoilMoistureDF")
     emptyTempHumDF.write.format("delta").mode("overwrite").save("./tmp/raw_temperature_humidity_zone")
+
+    printBoldMessage("Initializing Delta tables: writing emptyTempHumDF")
     emptyTempHumDF.write.format("delta").mode("overwrite").save("./tmp/temperature_humidity_zone_merge")
+
+    printBoldMessage("Initializing Delta tables: writing emptyTempHumDF")
     emptyCo2DF.write.format("delta").mode("overwrite").save("./tmp/raw_co2_zone")
+
+    printBoldMessage("Initializing Delta tables: writing emptyTempHumDF")
     emptySoilMoistureDF.write.format("delta").mode("overwrite").save("./tmp/raw_soil_moisture_zone")
   }
 
@@ -153,6 +178,7 @@ object Main2 extends App {
    */
   private def readKafkaStream(topic: String)(implicit spark: SparkSession): Dataset[(String, Timestamp)] = {
     sensorStreamManager.getKafkaStream(topic, Map("failOnDataLoss" -> "false"))
+      .getOrElse(spark.emptyDataFrame)
       .selectExpr("CAST(value AS STRING)", "timestamp").as[(String, Timestamp)]
   }
 

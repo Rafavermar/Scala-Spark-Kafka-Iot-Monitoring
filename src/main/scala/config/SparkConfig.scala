@@ -10,6 +10,7 @@ object SparkConfig {
       .config("spark.sql.streaming.checkpointLocation", "./tmp/checkpoint")
       .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
       .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog")
+      .config("spark.sql.adaptive.enabled", "false")
       .config("spark.sql.shuffle.partitions", "10")
       .getOrCreate()
   }
