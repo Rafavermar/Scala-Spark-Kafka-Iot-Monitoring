@@ -155,7 +155,7 @@ object Main2 extends App {
     val tempHumDF = tempHumProcessor.processStream(tempHumStream)
     val zoneDataDF = ZoneDataLoader.loadAndWriteZoneData(spark, DeltaTablePaths.zonePath)
 
-
+    println("Schema of tempHumDFWithZone before writing:")
     tempHumDF.printSchema()
 
     val tempHumDFWithZone = tempHumDF.join(zoneDataDF, tempHumDF("sensorId") === zoneDataDF("sensorId"), "left_outer")
@@ -170,8 +170,8 @@ object Main2 extends App {
         zoneDataDF("latitude"),
         zoneDataDF("longitude")
       )
-
-    tempHumDFWithZone.printSchema() // Verifica el esquema después del join
+    println("Schema of tempHumDFWithZone after join:")
+    tempHumDFWithZone.printSchema()
 
     // Configura el directorio de checkpoint y maneja la evolución del esquema
     val checkpointLocationTempHum = "./tmp/checkpoints/TempHum/"
@@ -206,10 +206,6 @@ object Main2 extends App {
     var soilMoistureDF = soilMoistureProcessor.processStream(soilMoistureStream)
     val zoneDataDF = ZoneDataLoader.loadAndWriteZoneData(spark, DeltaTablePaths.zonePath)
 
-    // Asegura que ambos DataFrames tienen las columnas necesarias antes de realizar el join
-    if (!soilMoistureDF.columns.contains("zoneId")) {
-      soilMoistureDF = soilMoistureDF.withColumn("zoneId", lit(null))
-    }
 
     val soilMoistureDFWithZone = soilMoistureDF.join(zoneDataDF, soilMoistureDF("sensorId") === zoneDataDF("sensorId"), "left_outer")
       .select(
@@ -301,6 +297,7 @@ object Main2 extends App {
    * @param spark Implicit SparkSession instance.
    */
   private def writeStreamData(df: Dataset[_], outputPath: String, format: String, outputMode: String, checkpointLocation: String, queryName: String, mergeSchema: Boolean = false, overwriteSchema: Boolean = false)(implicit spark: SparkSession): Unit = {
+    println(s"[writeStreamData] About to write a stream to $outputPath in $format format with mode $outputMode")
     val writer = df.writeStream
       .outputMode(outputMode)
       .format(format)
@@ -309,12 +306,12 @@ object Main2 extends App {
       .option("mergeSchema", mergeSchema.toString)
       .option("overwriteSchema", overwriteSchema.toString)
       .queryName(queryName)
-      .trigger(Trigger.ProcessingTime("30 seconds"))
+      .trigger(Trigger.ProcessingTime("10 seconds"))
 
     if (outputPath != null) writer.option("path", outputPath)
     if (checkpointLocation != null) writer.option("checkpointLocation", checkpointLocation)
     if (mergeSchema) writer.option("mergeSchema", "true")
-
+    println(s"[writeStreamData] Writing stream to $outputPath")
     writer.start()
   }
 
@@ -331,5 +328,6 @@ object Main2 extends App {
       .trigger(Trigger.ProcessingTime("30 seconds"))
       .option("truncate", "false")
       .start()
+      .awaitTermination()
   }
 }
