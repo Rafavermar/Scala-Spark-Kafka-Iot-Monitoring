@@ -30,7 +30,7 @@ object ZoneDataLoader {
         col("sensor.longitude").as("longitude")
       )
 
-    processedZones.show(false)
+
     processedZones.write.format("delta").mode("overwrite").save(outputPath)
     spark.read.format("delta").load(outputPath)
   }

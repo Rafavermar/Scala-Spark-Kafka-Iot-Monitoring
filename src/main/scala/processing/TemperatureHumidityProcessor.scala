@@ -1,23 +1,21 @@
 package processing
 
 import models.sensors.TemperatureHumiditySensor
-import org.apache.spark.sql.functions.{col, lit}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Dataset, SparkSession}
 
 import java.sql.Timestamp
-
 class TemperatureHumidityProcessor(implicit spark: SparkSession) {
   import spark.implicits._
 
-
   def processStream(rawData: Dataset[(String, Timestamp)]): DataFrame = {
     rawData.map {
-      case (rawString, timestamp) =>
-        val parts = rawString.split(",")
-        TemperatureHumiditySensor(parts(0), parts(1).toDouble, parts(2).toDouble, timestamp)
+      case (rawData, timestamp) =>
+        val parts = rawData.split(",")
+        val sensorId = if (parts.length > 0) parts(0) else "unknown"
+        val temperature = if (parts.length > 1) parts(1).toDoubleOption.getOrElse(Double.NaN) else Double.NaN
+        val humidity = if (parts.length > 2) parts(2).toDoubleOption.getOrElse(Double.NaN) else Double.NaN
+        TemperatureHumiditySensor(sensorId, temperature, humidity, timestamp)
     }.toDF()
-      .withColumn("zoneId", lit("")) // Ensure zoneId is always present
-      .select(col("sensorId"), col("temperature"), col("humidity"), col("timestamp"), col("zoneId"))
   }
 }

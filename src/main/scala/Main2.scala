@@ -4,7 +4,7 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.streaming.Trigger
 import processing.{CO2Processor, SoilMoistureProcessor, TemperatureHumidityProcessor}
-import projectutil.ZoneDataLoader
+import projectutil.{DeltaTablePaths, ZoneDataLoader}
 import schemas.{SensorSchemas, ZoneSchemaFlatten}
 import services.{DataStorageService, SensorDataProcessor, SensorStreamManager}
 
@@ -35,11 +35,10 @@ object Main2 extends App {
   // Create a SparkSession with the provided configurations
   implicit val spark: SparkSession = SparkConfig.createSession("IoT Farm Monitoring")
 
-  val outputPathZones = "./tmp/zones"
-  val zoneDataDF = ZoneDataLoader.loadAndWriteZoneData(spark, outputPathZones)  // load zones data
+  val zoneDataDF = ZoneDataLoader.loadAndWriteZoneData(spark, DeltaTablePaths.zonePath)
   // debugging
-  zoneDataDF.printSchema()
-  zoneDataDF.show(20, truncate = false)
+ //zoneDataDF.printSchema()
+ //zoneDataDF.show(20, truncate = false)
   // Define encoders for the custom data types
   implicit val stringTimestampEncoder: Encoder[(String, Timestamp)] = Encoders.tuple(Encoders.STRING, Encoders.TIMESTAMP)
   implicit val stringStringEncoder: Encoder[(String, String)] = Encoders.tuple(Encoders.STRING, Encoders.STRING)
@@ -72,29 +71,25 @@ object Main2 extends App {
     Logger.getLogger("io.netty").setLevel(Level.ERROR)
   }
 
+
   /**
    * Initializes Delta tables by creating empty DataFrames with predefined schemas
    * and writing them to the specified paths in Delta format.
    *
    * @param spark Implicit SparkSession instance.
    */
+
   private def initializeDeltaTables()(implicit spark: SparkSession): Unit = {
-    // Inicializando DataFrames vacíos para cada tipo de sensor con sus respectivos esquemas
-    val emptyTempHumDF = spark.createDataFrame(spark.sparkContext.emptyRDD[Row], SensorSchemas.temperatureHumiditySchema)
-    val emptyCo2DF = spark.createDataFrame(spark.sparkContext.emptyRDD[Row], SensorSchemas.co2Schema)
-    val emptySoilMoistureDF = spark.createDataFrame(spark.sparkContext.emptyRDD[Row], SensorSchemas.soilMoistureSchema)
-
-    // También inicializa el DataFrame para los datos de zonas
-    val emptyZoneDF = spark.createDataFrame(spark.sparkContext.emptyRDD[Row], ZoneSchemaFlatten.processedZoneSchema)
-
-    // Escribiendo los DataFrames vacíos a ubicaciones Delta específicas
-    emptyTempHumDF.write.format("delta").mode("overwrite").save("./tmp/raw_temperature_humidity_zone")
-    emptyTempHumDF.write.format("delta").mode("overwrite").save("./tmp/temperature_humidity_zone_merge")
-    emptyCo2DF.write.format("delta").mode("overwrite").save("./tmp/raw_co2_zone")
-    emptySoilMoistureDF.write.format("delta").mode("overwrite").save("./tmp/raw_soil_moisture_zone")
-
-    // Escribiendo el DataFrame de zonas a una ubicación Delta
-    emptyZoneDF.write.format("delta").mode("overwrite").save("./tmp/zones")
+    List(
+      (SensorSchemas.temperatureHumiditySchema, DeltaTablePaths.temperatureHumidityPath),
+      (SensorSchemas.temperatureHumiditySchema, DeltaTablePaths.temperatureHumidityMergePath),
+      (SensorSchemas.co2Schema, DeltaTablePaths.co2Path),
+      (SensorSchemas.soilMoistureSchema, DeltaTablePaths.soilMoisturePath),
+      (ZoneSchemaFlatten.processedZoneSchema, DeltaTablePaths.zonePath)
+    ).foreach { case (schema, path) =>
+      val emptyDF = spark.createDataFrame(spark.sparkContext.emptyRDD[Row], schema)
+      emptyDF.write.format("delta").mode("overwrite").save(path)
+    }
   }
 
 
@@ -106,7 +101,7 @@ object Main2 extends App {
   private def processAndWriteCO2Data(zoneDataDF: DataFrame)(implicit spark: SparkSession): Unit = {
     val co2Stream = readKafkaStream(KafkaConfig.co2Topic)
     val co2DF = new CO2Processor().processStream(co2Stream)
-    val zoneDataDF = ZoneDataLoader.loadAndWriteZoneData(spark, outputPathZones)
+    val zoneDataDF = ZoneDataLoader.loadAndWriteZoneData(spark, DeltaTablePaths.zonePath)
     zoneDataDF.show()
 
     // Join incluyendo todas las columnas necesarias de zoneDataDF
@@ -130,7 +125,7 @@ object Main2 extends App {
 
       // Calcula promedios y escribe a la consola para monitoreo
       val avgCo2DF = sensorDataProcessor.aggregateSensorData(co2DFWithZone, "1 minute", Seq("co2Level"))
-      writeStreamData(avgCo2DF, null, "console", "complete", checkpointLocationCO2, "avgCo2DF", mergeSchema = true, overwriteSchema = true)
+      writeStreamData(avgCo2DF, "./tmp/avgCO2", "console", "complete", checkpointLocationCO2, "avgCo2DF", mergeSchema = true, overwriteSchema = true)
     } catch {
       case e: Exception =>
         println(s"Failed to write due to schema evolution issues: ${e.getMessage}")
@@ -147,14 +142,14 @@ object Main2 extends App {
     val tempHumStream = readKafkaStream(KafkaConfig.temperatureHumidityTopic)
     val tempHumProcessor = new TemperatureHumidityProcessor()
     val tempHumDF = tempHumProcessor.processStream(tempHumStream)
-    val zoneDataDF = ZoneDataLoader.loadAndWriteZoneData(spark, outputPathZones)
+    val zoneDataDF = ZoneDataLoader.loadAndWriteZoneData(spark, DeltaTablePaths.zonePath)
 
     // Verifica que las columnas necesarias existan antes del join
-    val expectedColumns = Seq("sensorId", "temperature", "humidity", "timestamp", "zoneId")
-    val missingColumns = expectedColumns.filterNot(tempHumDF.columns.contains)
-    if (missingColumns.nonEmpty) {
-      throw new IllegalArgumentException("Missing columns in temperature humidity data: " + missingColumns.mkString(", "))
-    }
+    //val expectedColumns = Seq("sensorId", "temperature", "humidity", "timestamp")
+    //val missingColumns = expectedColumns.filterNot(tempHumDF.columns.contains)
+    //if (missingColumns.nonEmpty) {
+    //  throw new IllegalArgumentException("Missing columns in temperature humidity data: " + missingColumns.mkString(", "))
+    //}
 
     tempHumDF.printSchema() // Verifica el esquema después de procesar el stream
 
@@ -183,7 +178,7 @@ object Main2 extends App {
       writeStreamData(mergedTempHumDF, "./tmp/temperature_humidity_zone_merge_json", "json", "append", "./tmp/temperature_humidity_zone_merge_json_chk", "TempHum_merge_Json",mergeSchema = true, overwriteSchema = true)
 
       val avgSensorDataDF = sensorDataProcessor.aggregateSensorData(tempHumDFWithZone, "1 minute", Seq("temperature", "humidity"))
-      writeStreamData(avgSensorDataDF, null, "console", "complete", checkpointLocationTempHum,"avgSensorDataDF", mergeSchema = true, overwriteSchema = true)
+      writeStreamData(avgSensorDataDF, "./tmp/avgsensordataTH", "console", "complete", checkpointLocationTempHum,"avgSensorDataDF", mergeSchema = true, overwriteSchema = true)
     } catch {
       case e: Exception =>
         println(s"Error processing temperature and humidity data: ${e.getMessage}")
@@ -205,7 +200,7 @@ object Main2 extends App {
     val soilMoistureStream = readKafkaStream(KafkaConfig.soilMoistureTopic)
     val soilMoistureProcessor = new SoilMoistureProcessor()
     var soilMoistureDF = soilMoistureProcessor.processStream(soilMoistureStream)
-    val zoneDataDF = ZoneDataLoader.loadAndWriteZoneData(spark, outputPathZones)
+    val zoneDataDF = ZoneDataLoader.loadAndWriteZoneData(spark, DeltaTablePaths.zonePath)
 
     // Asegura que ambos DataFrames tienen las columnas necesarias antes de realizar el join
     if (!soilMoistureDF.columns.contains("zoneId")) {
@@ -234,7 +229,7 @@ object Main2 extends App {
 
       // Calcula los promedios y escribe los resultados a la consola para monitoreo en tiempo real
       val avgSoilMoistureDF = sensorDataProcessor.aggregateSensorData(soilMoistureDFWithZone, "1 minute", Seq("soilMoisture"))
-      writeStreamData(avgSoilMoistureDF, null, "console", "complete", checkpointLocationSoilMoist,"avgSoilMoisture", mergeSchema = true, overwriteSchema = true)
+      writeStreamData(avgSoilMoistureDF, "./tmp/avgsoilmoist", "console", "complete", checkpointLocationSoilMoist,"avgSoilMoisture", mergeSchema = true, overwriteSchema = true)
     } catch {
       case e: Exception =>
         println(s"Error processing soil moisture data: ${e.getMessage}")
@@ -254,6 +249,8 @@ object Main2 extends App {
     sensorStreamManager.getKafkaStream(topic, Map("failOnDataLoss" -> "false"))
       .selectExpr("CAST(value AS STRING)", "timestamp").as[(String, Timestamp)]
   }
+
+
 
   /**
    * Writes the streaming data to the specified output path and format.

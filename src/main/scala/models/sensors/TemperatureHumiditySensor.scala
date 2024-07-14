@@ -11,5 +11,5 @@ import java.sql.Timestamp
  * @param humidity Measured humidity.
  * @param timestamp Time when the measurement was taken.
  */
-case class TemperatureHumiditySensor(sensorId: String, temperature: Double, humidity: Double, timestamp: Timestamp, zoneId: Option[String] = None)
+case class TemperatureHumiditySensor(sensorId: String, temperature: Double, humidity: Double, timestamp: Timestamp)
 

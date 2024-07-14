@@ -10,4 +10,4 @@ import java.sql.Timestamp
  * @param timestamp The exact moment the soil moisture level was recorded.
  * @param zoneId The zone where the sensor is located.
  */
-case class SoilMoistureSensor(sensorId: String, soilMoisture: Double, timestamp: Timestamp, zoneId: Option[String] = None)
+case class SoilMoistureSensor(sensorId: String, soilMoisture: Double, timestamp: Timestamp)
