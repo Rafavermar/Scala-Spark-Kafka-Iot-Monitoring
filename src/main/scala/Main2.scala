@@ -59,9 +59,10 @@ object Main2 extends App {
   // Start processing and writing data for each sensor type
   try {
     // Iniciar procesamiento de datos
+    processAndWriteSoilMoistureData(zoneDataDF)
     processAndWriteCO2Data(zoneDataDF)
     processAndWriteTemperatureHumidityData(zoneDataDF)
-    processAndWriteSoilMoistureData(zoneDataDF)
+
 
     spark.streams.awaitAnyTermination()
   } catch {
