@@ -4,14 +4,13 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.streaming.Trigger
 import processing.{CO2Processor, SoilMoistureProcessor, TemperatureHumidityProcessor}
-import projectutil.{CustomStreamingQueryListener, DeltaTablePaths, ZoneDataLoader}
+import projectutil.{CustomStreamingQueryListener, DeltaTablePaths, PrintUtils, ZoneDataLoader}
 import schemas.{SensorSchemas, ZoneSchemaFlatten}
 import services.{DataStorageService, SensorDataProcessor, SensorStreamManager}
 
 import java.io.FileNotFoundException
 import java.nio.file.{Files, Paths}
 import java.sql.Timestamp
-
 
 /**
  * The Main2 object serves as the entry point for the IoT Farm Monitoring application.
@@ -29,7 +28,7 @@ import java.sql.Timestamp
  * - writeStreamToConsole: Writes streaming data to the console for debugging and monitoring purposes.
  */
 
-object Main2 extends App {
+object Main2 extends App with PrintUtils{
 
   // Setup logging configuration
   setupLogging()
@@ -48,27 +47,31 @@ object Main2 extends App {
   implicit val stringTimestampEncoder: Encoder[(String, Timestamp)] = Encoders.tuple(Encoders.STRING, Encoders.TIMESTAMP)
   implicit val stringStringEncoder: Encoder[(String, String)] = Encoders.tuple(Encoders.STRING, Encoders.STRING)
 
-  // Instantiate necessary services and processors
+  printBoldMessage("Creating services and processors...")
+  printBoldMessage("Creating services and processors: sensorStreamManager")
   val sensorStreamManager = new SensorStreamManager()
+  printBoldMessage("Creating services and processors: dataStorageService")
   val dataStorageService = new DataStorageService()
+  printBoldMessage("Creating services and processors: sensorDataProcessor")
   val sensorDataProcessor = new SensorDataProcessor()
 
-  // Initialize Delta tables with the required schemas
+  printBoldMessage("Initializing Delta tables...")
   initializeDeltaTables()
 
   // Start processing and writing data for each sensor type
   try {
-    // Iniciar procesamiento de datos
+    printBoldMessage("Processing and writing sensor data: processAndWriteSoilMoistureData")
     processAndWriteSoilMoistureData(zoneDataDF)
+    printBoldMessage("Processing and writing sensor data: processAndWriteCO2Data")
     processAndWriteCO2Data(zoneDataDF)
+    printBoldMessage("Processing and writing sensor data: processAndWriteTemperatureHumidityData")
     processAndWriteTemperatureHumidityData(zoneDataDF)
 
-
+    printBoldMessage("Waiting for any termination signals to stop the streaming queries...")
     spark.streams.awaitAnyTermination()
   } catch {
     case e: Exception => println(s"Error during streaming processing: ${e.getMessage}")
   } finally {
-    // Punto 3 y 5: Detener consultas y limpiar recursos
     // stopActiveQueries()
     cleanUpResources()
     //spark.stop()
@@ -93,7 +96,7 @@ object Main2 extends App {
    *
    * @param spark Implicit SparkSession instance.
    */
-
+  printBoldMessage("Initializing Delta tables: writing empty DF")
   private def initializeDeltaTables()(implicit spark: SparkSession): Unit = {
     List(
       (SensorSchemas.temperatureHumiditySchema, DeltaTablePaths.temperatureHumidityPath),
