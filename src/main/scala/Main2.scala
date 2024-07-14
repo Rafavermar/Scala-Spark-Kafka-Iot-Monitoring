@@ -120,7 +120,7 @@ object Main2 extends App {
     zoneDataDF.show()
 
     // Join incluyendo todas las columnas necesarias de zoneDataDF
-    val co2DFWithZone = co2DF.join(zoneDataDF, co2DF("sensorId") === zoneDataDF("sensorId"), "left_outer")
+    val co2DFWithZone = co2DF.join(broadcast(zoneDataDF), co2DF("sensorId") === zoneDataDF("sensorId"), "left_outer")
       .select(
         co2DF("sensorId"),
         co2DF("co2Level"),
@@ -162,7 +162,7 @@ object Main2 extends App {
     println("Schema of tempHumDFWithZone before writing:")
     tempHumDF.printSchema()
 
-    val tempHumDFWithZone = tempHumDF.join(zoneDataDF, tempHumDF("sensorId") === zoneDataDF("sensorId"), "left_outer")
+    val tempHumDFWithZone = tempHumDF.join(broadcast(zoneDataDF), tempHumDF("sensorId") === zoneDataDF("sensorId"), "left_outer")
       .select(
         tempHumDF("sensorId"),
         tempHumDF("temperature"),
@@ -215,7 +215,7 @@ object Main2 extends App {
     val zoneDataDF = ZoneDataLoader.loadAndWriteZoneData(spark, DeltaTablePaths.zonePath)
 
 
-    val soilMoistureDFWithZone = soilMoistureDF.join(zoneDataDF, soilMoistureDF("sensorId") === zoneDataDF("sensorId"), "left_outer")
+    val soilMoistureDFWithZone = soilMoistureDF.join(broadcast(zoneDataDF), soilMoistureDF("sensorId") === zoneDataDF("sensorId"), "left_outer")
       .select(
         soilMoistureDF("sensorId"),
         soilMoistureDF("soilMoisture"),
