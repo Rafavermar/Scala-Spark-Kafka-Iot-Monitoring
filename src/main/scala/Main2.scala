@@ -4,10 +4,11 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.streaming.Trigger
 import processing.{CO2Processor, SoilMoistureProcessor, TemperatureHumidityProcessor}
-import projectutil.{DeltaTablePaths, ZoneDataLoader}
+import projectutil.{CustomStreamingQueryListener, DeltaTablePaths, ZoneDataLoader}
 import schemas.{SensorSchemas, ZoneSchemaFlatten}
 import services.{DataStorageService, SensorDataProcessor, SensorStreamManager}
 
+import java.io.FileNotFoundException
 import java.nio.file.{Files, Paths}
 import java.sql.Timestamp
 
@@ -35,6 +36,8 @@ object Main2 extends App {
 
   // Create a SparkSession with the provided configurations
   implicit val spark: SparkSession = SparkConfig.createSession("IoT Farm Monitoring")
+
+  spark.streams.addListener(new CustomStreamingQueryListener())
 
   val zoneDataDF = ZoneDataLoader.loadAndWriteZoneData(spark, DeltaTablePaths.zonePath)
   // debugging
@@ -184,8 +187,12 @@ object Main2 extends App {
       val avgSensorDataDF = sensorDataProcessor.aggregateSensorData(tempHumDFWithZone, "1 minute", Seq("temperature", "humidity"))
       writeStreamData(avgSensorDataDF, "./tmp/avgsensordataTH", "console", "complete", checkpointLocationTempHum,"avgSensorDataDF", mergeSchema = true, overwriteSchema = true)
     } catch {
+      case e: IllegalStateException =>
+        println(s"Error de estado ilegal: ${e.getMessage}. Verifica los archivos delta y los directorios de checkpoint.")
+      case e: FileNotFoundException =>
+        println(s"Archivo no encontrado: ${e.getMessage}. Asegúrate de que los archivos delta existan y sean accesibles.")
       case e: Exception =>
-        println(s"Error processing temperature and humidity data: ${e.getMessage}")
+        println(s"Error inesperado: ${e.getMessage}")
     }
 
     // Filtro y escritura de datos de sensores defectuosos
@@ -203,7 +210,7 @@ object Main2 extends App {
   private def processAndWriteSoilMoistureData(zoneDataDF: DataFrame)(implicit spark: SparkSession): Unit = {
     val soilMoistureStream = readKafkaStream(KafkaConfig.soilMoistureTopic)
     val soilMoistureProcessor = new SoilMoistureProcessor()
-    var soilMoistureDF = soilMoistureProcessor.processStream(soilMoistureStream)
+    val soilMoistureDF = soilMoistureProcessor.processStream(soilMoistureStream)
     val zoneDataDF = ZoneDataLoader.loadAndWriteZoneData(spark, DeltaTablePaths.zonePath)
 
 
@@ -231,6 +238,10 @@ object Main2 extends App {
       val avgSoilMoistureDF = sensorDataProcessor.aggregateSensorData(soilMoistureDFWithZone, "1 minute", Seq("soilMoisture"))
       writeStreamData(avgSoilMoistureDF, "./tmp/avgsoilmoist", "console", "complete", checkpointLocationSoilMoist,"avgSoilMoisture", mergeSchema = true, overwriteSchema = true)
     } catch {
+      case e: IllegalStateException =>
+        println(s"Error de estado ilegal: ${e.getMessage}. Verifica los archivos delta y los directorios de checkpoint.")
+      case e: FileNotFoundException =>
+        println(s"Archivo no encontrado: ${e.getMessage}. Asegúrate de que los archivos delta existan y sean accesibles.")
       case e: Exception =>
         println(s"Error processing soil moisture data: ${e.getMessage}")
     }
@@ -325,7 +336,7 @@ object Main2 extends App {
     df.writeStream
       .outputMode("append")
       .format("console")
-      .trigger(Trigger.ProcessingTime("30 seconds"))
+      .trigger(Trigger.ProcessingTime("10 seconds"))
       .option("truncate", "false")
       .start()
       .awaitTermination()
