@@ -8,6 +8,7 @@ import projectutil.{DeltaTablePaths, ZoneDataLoader}
 import schemas.{SensorSchemas, ZoneSchemaFlatten}
 import services.{DataStorageService, SensorDataProcessor, SensorStreamManager}
 
+import java.nio.file.{Files, Paths}
 import java.sql.Timestamp
 
 
@@ -39,6 +40,7 @@ object Main2 extends App {
   // debugging
  //zoneDataDF.printSchema()
  //zoneDataDF.show(20, truncate = false)
+
   // Define encoders for the custom data types
   implicit val stringTimestampEncoder: Encoder[(String, Timestamp)] = Encoders.tuple(Encoders.STRING, Encoders.TIMESTAMP)
   implicit val stringStringEncoder: Encoder[(String, String)] = Encoders.tuple(Encoders.STRING, Encoders.STRING)
@@ -52,12 +54,21 @@ object Main2 extends App {
   initializeDeltaTables()
 
   // Start processing and writing data for each sensor type
-  processAndWriteCO2Data(zoneDataDF)
-  processAndWriteTemperatureHumidityData(zoneDataDF)
-  processAndWriteSoilMoistureData(zoneDataDF)
+  try {
+    // Iniciar procesamiento de datos
+    processAndWriteCO2Data(zoneDataDF)
+    processAndWriteTemperatureHumidityData(zoneDataDF)
+    processAndWriteSoilMoistureData(zoneDataDF)
 
-  // Wait for any termination signals to stop the streaming queries
-  spark.streams.awaitAnyTermination()
+    spark.streams.awaitAnyTermination()
+  } catch {
+    case e: Exception => println(s"Error during streaming processing: ${e.getMessage}")
+  } finally {
+    // Punto 3 y 5: Detener consultas y limpiar recursos
+    // stopActiveQueries()
+    cleanUpResources()
+    //spark.stop()
+  }
 
   /**
    * Sets up logging configuration to reduce log noise from various libraries.
@@ -144,14 +155,8 @@ object Main2 extends App {
     val tempHumDF = tempHumProcessor.processStream(tempHumStream)
     val zoneDataDF = ZoneDataLoader.loadAndWriteZoneData(spark, DeltaTablePaths.zonePath)
 
-    // Verifica que las columnas necesarias existan antes del join
-    //val expectedColumns = Seq("sensorId", "temperature", "humidity", "timestamp")
-    //val missingColumns = expectedColumns.filterNot(tempHumDF.columns.contains)
-    //if (missingColumns.nonEmpty) {
-    //  throw new IllegalArgumentException("Missing columns in temperature humidity data: " + missingColumns.mkString(", "))
-    //}
 
-    tempHumDF.printSchema() // Verifica el esquema después de procesar el stream
+    tempHumDF.printSchema()
 
     val tempHumDFWithZone = tempHumDF.join(zoneDataDF, tempHumDF("sensorId") === zoneDataDF("sensorId"), "left_outer")
       .select(
@@ -173,9 +178,8 @@ object Main2 extends App {
     try {
       writeStreamData(tempHumDFWithZone, "./tmp/raw_temperature_humidity_zone", "delta", "append", checkpointLocationTempHum, "TempHum_zone",mergeSchema = true, overwriteSchema = true)
 
-      val mergedTempHumDF = spark.readStream.format("delta").load("./tmp/raw_temperature_humidity_zone")
-      writeStreamData(mergedTempHumDF, "./tmp/temperature_humidity_zone_merge", "delta", "append", "./tmp/temperature_humidity_zone_merge_chk", "TempHum_merge",mergeSchema = true, overwriteSchema = true)
-      writeStreamData(mergedTempHumDF, "./tmp/temperature_humidity_zone_merge_json", "json", "append", "./tmp/temperature_humidity_zone_merge_json_chk", "TempHum_merge_Json",mergeSchema = true, overwriteSchema = true)
+      // val mergedTempHumDF = spark.readStream.format("delta").load("./tmp/raw_temperature_humidity_zone")
+      // writeStreamData(mergedTempHumDF, "./tmp/temperature_humidity_zone_merge", "delta", "append", "./tmp/temperature_humidity_zone_merge_chk", "TempHum_merge",mergeSchema = true, overwriteSchema = true)
 
       val avgSensorDataDF = sensorDataProcessor.aggregateSensorData(tempHumDFWithZone, "1 minute", Seq("temperature", "humidity"))
       writeStreamData(avgSensorDataDF, "./tmp/avgsensordataTH", "console", "complete", checkpointLocationTempHum,"avgSensorDataDF", mergeSchema = true, overwriteSchema = true)
@@ -185,7 +189,7 @@ object Main2 extends App {
     }
 
     // Filtro y escritura de datos de sensores defectuosos
-    val defectiveZoneDF = tempHumDFWithZone.filter(col("zoneId") === "defectiveZone")
+    val defectiveZoneDF = tempHumDFWithZone.filter(col("zoneId") === "Defective Zone")
     writeStreamToConsole(defectiveZoneDF)
   }
 
@@ -236,7 +240,40 @@ object Main2 extends App {
     }
   }
 
+  // def stopActiveQueries(): Unit = {
+  //   spark.streams.active.foreach { query =>
+  //     println(s"Stopping query: ${query.name}")
+  //     query.stop()
+  //   }
+  // }
 
+
+  def cleanUpResources(): Unit = {
+    val checkpointDirs = List(
+      DeltaTablePaths.temperatureHumidityPath,
+      DeltaTablePaths.temperatureHumidityMergePath,
+      DeltaTablePaths.co2Path,
+      DeltaTablePaths.soilMoisturePath,
+      DeltaTablePaths.zonePath
+    ).map(_ + "/checkpoints")
+
+    checkpointDirs.foreach { dir =>
+      try {
+        val path = Paths.get(dir)
+        if (Files.exists(path)) {
+          // Convertir el stream de Java a una lista de Scala
+          val pathsToDelete = Files.walk(path).toArray.toSeq.asInstanceOf[Seq[java.nio.file.Path]]
+          // Ordenar en orden inverso y eliminar archivos/directorios
+          pathsToDelete.sortWith(_.compareTo(_) > 0).foreach { p =>
+            Files.deleteIfExists(p)
+          }
+          println(s"Cleaned up directory: $dir")
+        }
+      } catch {
+        case e: Exception => println(s"Failed to clean up directory $dir: ${e.getMessage}")
+      }
+    }
+  }
   /**
    * Reads a Kafka stream for the given topic and returns a Dataset of tuples containing
    * the raw data as a string and a timestamp.
