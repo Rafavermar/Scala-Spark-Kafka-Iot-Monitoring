@@ -13,7 +13,6 @@ object SparkConfig {
       .config("spark.databricks.delta.schema.autoMerge", "true")
       .config("spark.sql.adaptive.enabled","false")
       .config("spark.sql.streaming.checkpointLocation", "./tmp")
-      .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension")
       .config("spark.streaming.stopGracefullyOnShutdown", "true")
       .config("spark.sql.streaming.schemaInference", "False")
       .config("spark.sql.streaming.forceDeleteTempCheckpointLocation", "true")

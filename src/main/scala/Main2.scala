@@ -142,7 +142,7 @@ object Main2 extends App with PrintUtils{
       writeStreamData(co2DFWithZone, "./tmp/raw_co2_zone", "delta", "append", checkpointLocationCO2, "CO2_zone", mergeSchema = true, overwriteSchema = true)
 
       // Calcula promedios y escribe a la consola para monitoreo
-      val avgCo2DF = sensorDataProcessor.aggregateSensorData(co2DFWithZone, "1 minute", Seq("co2Level"))
+      val avgCo2DF = sensorDataProcessor.aggregateSensorData(co2DFWithZone, "10 minutes", Seq("co2Level"))
       writeStreamData(avgCo2DF, "./tmp/avgCO2", "console", "complete", checkpointLocationCO2, "avgCo2DF", mergeSchema = true, overwriteSchema = true)
     } catch {
       case e: Exception =>
@@ -188,7 +188,7 @@ object Main2 extends App with PrintUtils{
       // val mergedTempHumDF = spark.readStream.format("delta").load("./tmp/raw_temperature_humidity_zone")
       // writeStreamData(mergedTempHumDF, "./tmp/temperature_humidity_zone_merge", "delta", "append", "./tmp/temperature_humidity_zone_merge_chk", "TempHum_merge",mergeSchema = true, overwriteSchema = true)
 
-      val avgSensorDataDF = sensorDataProcessor.aggregateSensorData(tempHumDFWithZone, "1 minute", Seq("temperature", "humidity"))
+      val avgSensorDataDF = sensorDataProcessor.aggregateSensorData(tempHumDFWithZone, "10 minutes", Seq("temperature", "humidity"))
       writeStreamData(avgSensorDataDF, "./tmp/avgsensordataTH", "console", "complete", checkpointLocationTempHum,"avgSensorDataDF", mergeSchema = true, overwriteSchema = true)
     } catch {
       case e: IllegalStateException =>
@@ -239,7 +239,7 @@ object Main2 extends App with PrintUtils{
       writeStreamData(soilMoistureDFWithZone, "./tmp/raw_soil_moisture_zone", "delta", "append", checkpointLocationSoilMoist,"SoilMoisture_zone" , mergeSchema = true, overwriteSchema = true)
 
       // Calcula los promedios y escribe los resultados a la consola para monitoreo en tiempo real
-      val avgSoilMoistureDF = sensorDataProcessor.aggregateSensorData(soilMoistureDFWithZone, "1 minute", Seq("soilMoisture"))
+      val avgSoilMoistureDF = sensorDataProcessor.aggregateSensorData(soilMoistureDFWithZone, "10 minutes", Seq("soilMoisture"))
       writeStreamData(avgSoilMoistureDF, "./tmp/avgsoilmoist", "console", "complete", checkpointLocationSoilMoist,"avgSoilMoisture", mergeSchema = true, overwriteSchema = true)
     } catch {
       case e: IllegalStateException =>
