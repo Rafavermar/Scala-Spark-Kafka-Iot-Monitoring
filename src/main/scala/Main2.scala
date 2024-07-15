@@ -3,6 +3,7 @@ import org.apache.log4j.{Level, Logger}
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.streaming.Trigger
+import org.apache.spark.util.LongAccumulator
 import processing.{CO2Processor, SoilMoistureProcessor, TemperatureHumidityProcessor}
 import projectutil.{CustomStreamingQueryListener, DeltaTablePaths, PrintUtils, ZoneDataLoader}
 import schemas.{SensorSchemas, ZoneSchemaFlatten}
@@ -30,18 +31,19 @@ import java.sql.Timestamp
 
 object Main2 extends App with PrintUtils{
 
-  // Setup logging configuration
+
   setupLogging()
 
-  // Create a SparkSession with the provided configurations
   implicit val spark: SparkSession = SparkConfig.createSession("IoT Farm Monitoring")
+  // Crear un acumulador para contar errores de sensores defectuosos
+
+  // Crear un acumulador para contar errores de sensores defectuosos
+  val defectiveSensorCounter: LongAccumulator = spark.sparkContext.longAccumulator("Defective Sensor Counter")
 
   spark.streams.addListener(new CustomStreamingQueryListener())
 
   val zoneDataDF = ZoneDataLoader.loadAndWriteZoneData(spark, DeltaTablePaths.zonePath)
-  // debugging
- //zoneDataDF.printSchema()
- //zoneDataDF.show(20, truncate = false)
+
 
   // Define encoders for the custom data types
   implicit val stringTimestampEncoder: Encoder[(String, Timestamp)] = Encoders.tuple(Encoders.STRING, Encoders.TIMESTAMP)
@@ -54,6 +56,11 @@ object Main2 extends App with PrintUtils{
   val dataStorageService = new DataStorageService()
   printBoldMessage("Creating services and processors: sensorDataProcessor")
   val sensorDataProcessor = new SensorDataProcessor()
+
+  val errorMonitoringService = new ErrorMonitoringService(sensorStreamManager, defectiveSensorCounter)(spark)
+  errorMonitoringService.monitorDefectiveSensors(KafkaConfig.co2Topic, "./errors/co2")
+  errorMonitoringService.monitorDefectiveSensors(KafkaConfig.temperatureHumidityTopic, "./errors/temperatureHumidity")
+  errorMonitoringService.monitorDefectiveSensors(KafkaConfig.soilMoistureTopic, "./errors/soilMoisture")
 
   printBoldMessage("Initializing Delta tables...")
   initializeDeltaTables()
