@@ -86,7 +86,7 @@
       "sensors": [
         {
           "id": "sensor9",
-          "name": "Defective Sensor 3",
+          "name": "Defective Sensor 9",
           "latitude": -33.868820,
           "longitude": 151.209296,
           "type": "temperature"
