@@ -1,3 +1,5 @@
+package main
+
 import config.{KafkaConfig, SparkConfig}
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.sql._
