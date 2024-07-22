@@ -83,11 +83,11 @@ sbt clean compile
 ```sh
 docker compose up -d
 ```
-4**Run the Data Generator:**
+4. **Run the Data Generator:**
 ```sh
 sbt "runMain io.KafkaDataGeneratorMain"
 ```` 
-5**Start the Spark Application:**
+5. **Start the Spark Application:**
 ```sh
 sbt "runMain Main2"
 ```
