@@ -2,17 +2,13 @@ package services
 
 import org.apache.spark.sql.SparkSession
 import org.scalatest.funsuite.AnyFunSuite
+import spark.SparkSessionTestWrapperWithDelta
 
-class DataStorageServiceTest extends AnyFunSuite {
-
-  implicit val spark: SparkSession = SparkSession.builder()
-    .master("local[*]")
-    .appName("DataStorageServiceTest")
-    .getOrCreate()
-
-  import spark.implicits._
+class DataStorageServiceTest extends AnyFunSuite with SparkSessionTestWrapperWithDelta {
 
   test("DataStorageService should write and read data correctly") {
+    import spark.implicits._
+    implicit val _spark: SparkSession = spark
     val dataStorageService = new DataStorageService()
 
     val data = Seq(

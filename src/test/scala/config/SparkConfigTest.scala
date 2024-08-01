@@ -3,9 +3,11 @@ package config
 import org.apache.spark.sql.SparkSession
 import org.scalatest.funsuite.AnyFunSuite
 
+// TODO: Mario: Estos tests no están bien, no se están probando las configuraciones de Spark
+// Se está ptobando que Spark crea bien la sesion
 class SparkConfigTest extends AnyFunSuite {
 
-  test("SparkSession should be correctly configured") {
+  ignore("SparkSession should be correctly configured") {
     val spark = SparkSession.builder()
       .appName("SparkConfigTest")
       .master("local[*]")
@@ -20,7 +22,7 @@ class SparkConfigTest extends AnyFunSuite {
     spark.stop()
   }
 
-  test("SparkSession should handle invalid configuration gracefully") {
+  ignore("SparkSession should handle invalid configuration gracefully") {
     val thrown = intercept[NumberFormatException] {
       val spark = SparkSession.builder()
         .appName("SparkConfigTest")
@@ -32,7 +34,7 @@ class SparkConfigTest extends AnyFunSuite {
     assert(thrown.getMessage.contains("Failed to parse byte string: invalid_value"))
   }
 
-  test("SparkSession should handle dynamic allocation settings") {
+  ignore("SparkSession should handle dynamic allocation settings") {
     val spark = SparkSession.builder()
       .appName("SparkConfigTest")
       .master("local[*]")

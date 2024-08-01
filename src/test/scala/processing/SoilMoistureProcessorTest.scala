@@ -2,17 +2,15 @@ package processing
 
 import org.apache.spark.sql.SparkSession
 import org.scalatest.funsuite.AnyFunSuite
+import spark.SparkSessionTestWrapper
+
 import java.sql.Timestamp
 
-class SoilMoistureProcessorTest extends AnyFunSuite {
-  implicit val spark: SparkSession = SparkSession.builder()
-    .appName("SoilMoistureProcessorTest")
-    .master("local[*]")
-    .getOrCreate()
-
-  import spark.implicits._
+class SoilMoistureProcessorTest extends AnyFunSuite with SparkSessionTestWrapper{
 
   test("processStream should correctly parse well-formatted data") {
+    import spark.implicits._
+    implicit val _spark: SparkSession = spark
     val input = Seq(
       ("sensor1,30.5,2024-06-30 12:00:00.0", Timestamp.valueOf("2024-06-30 12:00:00")),
       ("sensor2,45.0,2024-06-30 12:05:00.0", Timestamp.valueOf("2024-06-30 12:05:00"))
@@ -30,6 +28,8 @@ class SoilMoistureProcessorTest extends AnyFunSuite {
   }
 
   test("processStream should handle incomplete data gracefully") {
+    import spark.implicits._
+    implicit val _spark: SparkSession = spark
     val input = Seq(
       ("sensor1,30.5", Timestamp.valueOf("2024-06-30 12:00:00")),
       ("sensor2", Timestamp.valueOf("2024-06-30 12:05:00"))
@@ -47,6 +47,8 @@ class SoilMoistureProcessorTest extends AnyFunSuite {
   }
 
   test("processStream should handle malformed data gracefully") {
+    import spark.implicits._
+    implicit val _spark: SparkSession = spark
     val input = Seq(
       ("sensor1,not_a_number,2024-06-30 12:00:00.0", Timestamp.valueOf("2024-06-30 12:00:00")),
       ("sensor2,45.0,not_a_timestamp", Timestamp.valueOf("2024-06-30 12:05:00"))
@@ -64,6 +66,8 @@ class SoilMoistureProcessorTest extends AnyFunSuite {
   }
 
   test("processStream should handle empty data gracefully") {
+    import spark.implicits._
+    implicit val _spark: SparkSession = spark
     val input = Seq(
       ("", Timestamp.valueOf("2024-06-30 12:00:00")),
       ("", Timestamp.valueOf("2024-06-30 12:05:00"))
@@ -81,6 +85,8 @@ class SoilMoistureProcessorTest extends AnyFunSuite {
   }
 
   test("processStream should handle large volumes of data") {
+    import spark.implicits._
+    implicit val _spark: SparkSession = spark
     val largeInput = (1 to 10000).map(i => (s"sensor$i,${i.toDouble},2024-06-30 12:00:00.0", Timestamp.valueOf("2024-06-30 12:00:00"))).toDS()
 
     val processor = new SoilMoistureProcessor()

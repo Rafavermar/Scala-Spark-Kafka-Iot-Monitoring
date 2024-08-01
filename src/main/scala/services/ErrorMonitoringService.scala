@@ -4,7 +4,7 @@ import org.apache.spark.sql.streaming.StreamingQuery
 import org.apache.spark.util.LongAccumulator
 import services.SensorStreamManager
 
-class ErrorMonitoringService(sensorStreamManager: SensorStreamManager, defectiveSensorCounter: LongAccumulator)(implicit spark: SparkSession) {
+class ErrorMonitoringService(sensorStreamManager: SensorStreamManager, defectiveSensorCounter: LongAccumulator) {
   def monitorDefectiveSensors(topic: String, outputPath: String): StreamingQuery = {
     // Utilizar SensorStreamManager para obtener el stream
     val stream = sensorStreamManager.getKafkaStream(topic)

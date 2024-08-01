@@ -8,7 +8,7 @@ import org.apache.spark.sql.{DataFrame, SparkSession}
  *
  * @param spark Implicit SparkSession instance.
  */
-class SensorStreamManager(implicit spark: SparkSession) {
+class SensorStreamManager()(implicit spark: SparkSession) {
 
   def getKafkaStream(topic: String, options: Map[String, String] = Map()): DataFrame = {
     val defaultOptions = Map(

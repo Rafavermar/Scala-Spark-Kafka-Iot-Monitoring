@@ -3,19 +3,16 @@ package processing
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions._
 import org.scalatest.funsuite.AnyFunSuite
+import spark.SparkSessionTestWrapper
 
 import java.sql.Timestamp
 
-class TemperatureHumidityProcessorTest extends AnyFunSuite {
+class TemperatureHumidityProcessorTest extends AnyFunSuite with SparkSessionTestWrapper {
 
-  implicit val spark: SparkSession = SparkSession.builder()
-    .master("local[*]")
-    .appName("TemperatureHumidityProcessorTest")
-    .getOrCreate()
-
-  import spark.implicits._
 
   test("TemperatureHumidityProcessor should process raw data correctly") {
+    import spark.implicits._
+    implicit val _spark: SparkSession = spark
     val processor = new TemperatureHumidityProcessor()
 
     val rawData = Seq(

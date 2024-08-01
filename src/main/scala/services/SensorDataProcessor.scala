@@ -3,7 +3,7 @@ package services
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.{DataFrame, SparkSession}
 
-class SensorDataProcessor(implicit spark: SparkSession) {
+class SensorDataProcessor()(implicit spark: SparkSession) {
   import spark.implicits._
 
   /**

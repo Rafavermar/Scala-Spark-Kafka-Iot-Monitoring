@@ -2,20 +2,17 @@ package processing
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions._
+import org.scalatest.BeforeAndAfterAll
 import org.scalatest.funsuite.AnyFunSuite
+import spark.SparkSessionTestWrapper
 
 import java.sql.Timestamp
 
-class CO2ProcessorTest extends AnyFunSuite {
-
-  implicit val spark: SparkSession = SparkSession.builder()
-    .master("local[*]")
-    .appName("CO2ProcessorTest")
-    .getOrCreate()
-
-  import spark.implicits._
+class CO2ProcessorTest extends AnyFunSuite with SparkSessionTestWrapper {
 
   test("CO2Processor should process raw data correctly") {
+    import spark.implicits._
+    implicit val _spark: SparkSession = spark
     val processor = new CO2Processor()
 
     val rawData = Seq(

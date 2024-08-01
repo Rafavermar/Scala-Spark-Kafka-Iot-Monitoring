@@ -13,6 +13,10 @@ libraryDependencies ++= Dependencies.spark ++ Seq(
 )
 
 libraryDependencies ++= Seq(
-  "org.scalatest" %% "scalatest" % "3.2.9" % Test
+  "org.scalatest" %% "scalatest" % "3.2.19" % Test,
+  "com.github.mrpowers" %% "spark-fast-tests"  % "1.3.0" % Test,
 )
+
+// Dont run tests in parallel
+Test / parallelExecution := false
 

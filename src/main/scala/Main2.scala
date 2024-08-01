@@ -31,10 +31,11 @@ import java.sql.Timestamp
 
 object Main2 extends App with PrintUtils{
 
+  implicit val log: Logger = Logger.getLogger(getClass.getName)
 
   setupLogging()
 
-  implicit val spark: SparkSession = SparkConfig.createSession("IoT Farm Monitoring")
+  implicit val spark: SparkSession = SparkConfig.createSession("IoT Farm Monitoring", "local[*]", useDelta = true)
   // Crear un acumulador para contar errores de sensores defectuosos
 
   // Crear un acumulador para contar errores de sensores defectuosos
@@ -50,14 +51,14 @@ object Main2 extends App with PrintUtils{
   implicit val stringStringEncoder: Encoder[(String, String)] = Encoders.tuple(Encoders.STRING, Encoders.STRING)
 
   printBoldMessage("Creating services and processors...")
-  printBoldMessage("Creating services and processors: sensorStreamManager")
+  printAndLog("Creating services and processors: sensorStreamManager")
   val sensorStreamManager = new SensorStreamManager()
-  printBoldMessage("Creating services and processors: dataStorageService")
+  printAndLog("Creating services and processors: dataStorageService")
   val dataStorageService = new DataStorageService()
-  printBoldMessage("Creating services and processors: sensorDataProcessor")
+  printAndLog("Creating services and processors: sensorDataProcessor")
   val sensorDataProcessor = new SensorDataProcessor()
 
-  val errorMonitoringService = new ErrorMonitoringService(sensorStreamManager, defectiveSensorCounter)(spark)
+  val errorMonitoringService = new ErrorMonitoringService(sensorStreamManager, defectiveSensorCounter)
   errorMonitoringService.monitorDefectiveSensors(KafkaConfig.co2Topic, "./errors/co2")
   errorMonitoringService.monitorDefectiveSensors(KafkaConfig.temperatureHumidityTopic, "./errors/temperatureHumidity")
   errorMonitoringService.monitorDefectiveSensors(KafkaConfig.soilMoistureTopic, "./errors/soilMoisture")
